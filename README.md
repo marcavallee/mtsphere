@@ -4,5 +4,5 @@ Programs in Fortran and Python have been developed to simulate the magnetotellur
 
 
 
-Source codes and executables are provided for Fortran and Python. Windows Fortran executables are provided in Fortran/\*/exec directories for Intel and gfortran compiler. Python executable was created using pyInstaller. Of course, the best performance is achieved with Fortran.
+Source codes and executables are provided for Fortran and Python. Windows Fortran executables are provided for Intel and Windows gfortran compilers. The author is aware of compilation in on a Mac using appropriate libraries. Python executable was created using pyInstaller. Of course, the best performance is achieved with Fortran.
 
