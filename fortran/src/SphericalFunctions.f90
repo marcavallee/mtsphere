@@ -338,9 +338,10 @@ subroutine CylindricalDerivativeMatrixInitialisation(NTERMS,LMBDA,DXPIY,DXMIY,DX
  INTEGER NLYR,J,SXLYR,INC
  REAL, DIMENSION(NLYR) :: CALF,CTAU,CFREQ,REPS
  REAL(KIND=QL) THKD(NLYR-1),LMBDA, LMBSQ, DPTHL(NLYR), ZS
- COMPLEX(KIND=QL)  EP,T(NLYR),EJ,EH,EMH,EPH,E2H,ES1,ES2,FN(2,0:NLYR),AN(2,0:NLYR), &
+ COMPLEX(KIND=QL)  EP,T(NLYR),EJ,EH,EMH,EPH,E2H,ES1,ES2,FN(2,2,0:NLYR),AN(2,2,0:NLYR), &
      FDEN,ADEN,RTE(2,1:NLYR-1),RTM(2,1:NLYR-1)
- COMPLEX(KIND=QL), DIMENSION (NLYR) :: FT,AT,ADMHAT,IMPHAT
+ complex(KIND=QL) FT(NLYR,2), AT(NLYR,2)
+ COMPLEX(KIND=QL), DIMENSION (NLYR) :: ADMHAT,IMPHAT
  COMPLEX(KIND=QL), DIMENSION (0:NLYR) :: S,YHAT,ZHAT,ADM,IMP
  
  AN = (0._QL,0._QL)
@@ -391,10 +392,10 @@ END IF
     ELSE
         EJ = ZERO
     END IF
-    FN(2,0) = EJ * ( ADM(0) - ADMHAT(1) ) / ( ADM(0) + ADMHAT(1) )
-    AN(2,0) = EJ * ( IMP(0) - IMPHAT(1) ) / ( IMP(0) + IMPHAT(1) )
-    FT(1) = FN(2,0) + EJ
-    AT(1) = AN(2,0) + EJ
+    FN(2,1,0) = EJ * ( ADM(0) - ADMHAT(1) ) / ( ADM(0) + ADMHAT(1) )
+    AN(2,1,0) = EJ * ( IMP(0) - IMPHAT(1) ) / ( IMP(0) + IMPHAT(1) )
+    FT(1,1) = FN(2,1,0) + EJ
+    AT(1,1) = AN(2,1,0) + EJ
  ELSE IF ( SXLYR == NLYR ) THEN
     EP = S(NLYR) * ( ZS - DPTHL(NLYR) )
     IF ( REAL (EP) < EXP_TOL) THEN
@@ -403,13 +404,13 @@ END IF
         EJ = ZERO
     END IF
     IF ( ADM(NLYR) .NE. ADMHAT(NLYR) ) THEN
-        FN(1,NLYR) = EJ * ( ADM(NLYR) + ADMHAT(NLYR) ) / ( ADM(NLYR) - ADMHAT(NLYR) )
+        FN(1,2,NLYR) = EJ * ( ADM(NLYR) + ADMHAT(NLYR) ) / ( ADM(NLYR) - ADMHAT(NLYR) )
     END IF
     IF ( IMP(NLYR) .NE. IMPHAT(NLYR) ) THEN
-        AN(1,NLYR) = EJ * ( IMP(NLYR) + IMPHAT(NLYR) ) / ( IMP(NLYR) - IMPHAT(NLYR) )
+        AN(1,2,NLYR) = EJ * ( IMP(NLYR) + IMPHAT(NLYR) ) / ( IMP(NLYR) - IMPHAT(NLYR) )
     END IF
-    FT(NLYR) = FN(1,NLYR) + EJ
-    AT(NLYR) = AN(1,NLYR) + EJ
+    FT(NLYR,2) = FN(1,2,NLYR) + EJ
+    AT(NLYR,2) = AN(1,2,NLYR) + EJ
 ELSE
     EP = 2.0_QL * S(SXLYR) * THKD(SXLYR) 
     IF ( REAL(EP) < EXP_TOL ) THEN
@@ -428,24 +429,28 @@ ELSE
            ( ADMHAT(SXLYR) + ADM(SXLYR) ) * ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * E2H
     ADEN = ( IMPHAT(SXLYR) - IMP(SXLYR) ) * ( IMPHAT(SXLYR+1) + IMP(SXLYR) )  - &
            ( IMPHAT(SXLYR) + IMP(SXLYR) ) * ( IMPHAT(SXLYR+1) - IMP(SXLYR) ) * E2H
-    FN(1,SXLYR) = - ( ADMHAT(SXLYR) + ADM(SXLYR) ) * & 
-        ( ( ADMHAT(SXLYR+1) + ADM(SXLYR) ) * ES1 - ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * EMH * ES2 ) / ADEN
-    FN(1,SXLYR) = - ( IMPHAT(SXLYR) + IMP(SXLYR) ) * & 
-        ( ( IMPHAT(SXLYR+1) + IMP(SXLYR) ) * ES1 - ( IMPHAT(SXLYR+1) - IMP(SXLYR) ) * EMH * ES2 ) / FDEN
-    FN(2,SXLYR) = ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * & 
-        ( ( ADMHAT(SXLYR) + ADM(SXLYR) ) * E2H * ES1 - ( ADMHAT(SXLYR) - ADM(SXLYR) ) * EMH * ES2 ) / ADEN
-    AN(2,SXLYR) = ( IMPHAT(SXLYR+1) - IMP(SXLYR) ) * & 
-        ( ( IMPHAT(SXLYR) + IMP(SXLYR) ) * E2H * ES1 - ( IMPHAT(SXLYR) - IMP(SXLYR) ) * EMH * ES2 ) / FDEN
-    FT(SXLYR) = FN(1,SXLYR) + FN(2,SXLYR) + ES1
-    AT(SXLYR) = AN(1,SXLYR) + AN(2,SXLYR) + ES1
-    FT(SXLYR+1) = FN(1,SXLYR) * EMH + FN(2,SXLYR) * EPH + ES2
-    AT(SXLYR+1) = AN(1,SXLYR) * EMH + AN(2,SXLYR) * EPH + ES2
+    FN(1,1,SXLYR) =   ( ADMHAT(SXLYR) + ADM(SXLYR) ) * ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * EMH * ES2 / FDEN
+    FN(1,2,SXLYR) = - ( ADMHAT(SXLYR) + ADM(SXLYR) ) * ( ADMHAT(SXLYR+1) + ADM(SXLYR) ) * ES1 / FDEN
+    AN(1,1,SXLYR) =   ( IMPHAT(SXLYR) + IMP(SXLYR) ) * ( IMPHAT(SXLYR+1) - IMP(SXLYR) ) * EMH * ES2 / ADEN
+    AN(1,2,SXLYR) = - ( IMPHAT(SXLYR) + IMP(SXLYR) ) * ( IMPHAT(SXLYR+1) + IMP(SXLYR) ) * ES1 / ADEN
+    FN(2,1,SXLYR) = - ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * ( ADMHAT(SXLYR) - ADM(SXLYR) ) * EMH * ES2 / FDEN
+    FN(2,2,SXLYR) =   ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * ( ADMHAT(SXLYR) + ADM(SXLYR) ) * E2H * ES1 / FDEN
+    AN(2,1,SXLYR) = - ( IMPHAT(SXLYR+1) - IMP(SXLYR) ) * ( IMPHAT(SXLYR) - IMP(SXLYR) ) * EMH * ES2 / ADEN
+    AN(2,2,SXLYR) =   ( IMPHAT(SXLYR+1) - IMP(SXLYR) ) * ( IMPHAT(SXLYR) + IMP(SXLYR) ) * E2H * ES1 / ADEN
+    FT(SXLYR,1) = FN(1,1,SXLYR) + FN(2,1,SXLYR) 
+    FT(SXLYR,2) = FN(1,2,SXLYR) + FN(2,2,SXLYR) + ES1
+    AT(SXLYR,1) = AN(1,1,SXLYR) + AN(2,1,SXLYR)
+    AT(SXLYR,2) = AN(1,2,SXLYR) + AN(2,2,SXLYR) + ES1
+    FT(SXLYR+1,1) = FN(1,1,SXLYR) * EMH + FN(2,1,SXLYR) * EPH + ES2
+    FT(SXLYR+1,2) = FN(1,2,SXLYR) * EMH + FN(2,2,SXLYR) * EPH
+    AT(SXLYR+1,1) = AN(1,1,SXLYR) * EMH + AN(2,1,SXLYR) * EPH + ES2
+    AT(SXLYR+1,2) = AN(1,2,SXLYR) * EMH + AN(2,2,SXLYR) * EPH 
 END IF
 
 do J = SXLYR-1, 0, -1
     if ( J == 0 ) then
-        AN(2,0) = AT(1)
-        FN(2,0) = FT(1)
+        AN(2,:,0) = AT(1,:)
+        FN(2,:,0) = FT(1,:)
     else
         EP = 2._QL * S(J) * THKD(J) 
         IF ( REAL(EP) < EXP_TOL ) THEN
@@ -455,18 +460,18 @@ do J = SXLYR-1, 0, -1
             EMH = ZERO
             E2H = ZERO
         END if
-        AT(J) = AT(J+1) * 2 * imp(J) * EMH / ( imp(J) * ( 1.0_QL + E2H ) - imphat(J) * ( 1.0_QL - E2H ) )
-        FT(J) = FT(J+1) * 2 * ADM(J) * EMH / ( ADM(J) * ( 1.0_QL + E2H ) - ADMhat(J) * ( 1.0_QL - E2H ) )
-        AN(1,J) = AT(J) * ( imp(J) + imphat(J) ) / 2.0_QL / imp(J)
-        AN(2,J) = AT(J) * ( imp(J) - imphat(J) ) / 2.0_QL / imp(J)
-        FN(1,J) = FT(J) * ( adm(J) + admhat(J) ) / 2.0_QL / adm(J)
-        FN(2,J) = FT(J) * ( adm(J) - admhat(J) ) / 2.0_QL / adm(J)
+        AT(J,:) = AT(J+1,:) * 2 * imp(J) * EMH / ( imp(J) * ( 1.0_QL + E2H ) - imphat(J) * ( 1.0_QL - E2H ) )
+        FT(J,:) = FT(J+1,:) * 2 * ADM(J) * EMH / ( ADM(J) * ( 1.0_QL + E2H ) - ADMhat(J) * ( 1.0_QL - E2H ) )
+        AN(1,:,J) = AT(J,:) * ( imp(J) + imphat(J) ) / 2.0_QL / imp(J)
+        AN(2,:,J) = AT(J,:) * ( imp(J) - imphat(J) ) / 2.0_QL / imp(J)
+        FN(1,:,J) = FT(J,:) * ( adm(J) + admhat(J) ) / 2.0_QL / adm(J)
+        FN(2,:,J) = FT(J,:) * ( adm(J) - admhat(J) ) / 2.0_QL / adm(J)
     end if
 end do
 do J = SXLYR+1, NLYR
     if ( J == NLYR ) then
-        AN(1,NLYR) = AT(NLYR)
-        FN(1,NLYR) = FT(NLYR)
+        AN(1,:,NLYR) = AT(NLYR,:)
+        FN(1,:,NLYR) = FT(NLYR,:)
     else
         EP = S(J) * THKD(J) 
         IF ( REAL(EP) < EXP_TOL ) THEN
@@ -476,15 +481,15 @@ do J = SXLYR+1, NLYR
             EMH = ZERO
             EPH = ZERO
         end if
-        AN(1,J) = AT(J) * ( imp(J) + imphat(J) ) / 2.0_QL / imp(J)
-        AN(2,J) = AT(J) * ( imp(J) - imphat(J) ) / 2.0_QL / imp(J)
-        FN(1,J) = FT(J) * ( adm(J) + admhat(J) ) / 2.0_QL / adm(J)
-        FN(2,J) = FT(J) * ( adm(J) - admhat(J) ) / 2.0_QL / adm(J)
-        AT(J+1) = AN(1,J) * EMH + AN(2,J) * EPH
-        FT(J+1) = FN(1,J) * EMH + FN(2,J) * EPH
+        AN(1,:,J) = AT(J,:) * ( imp(J) + imphat(J) ) / 2.0_QL / imp(J)
+        AN(2,:,J) = AT(J,:) * ( imp(J) - imphat(J) ) / 2.0_QL / imp(J)
+        FN(1,:,J) = FT(J,:) * ( adm(J) + admhat(J) ) / 2.0_QL / adm(J)
+        FN(2,:,J) = FT(J,:) * ( adm(J) - admhat(J) ) / 2.0_QL / adm(J)
+        AT(J+1,:) = AN(1,:,J) * EMH + AN(2,:,J) * EPH
+        FT(J+1,:) = FN(1,:,J) * EMH + FN(2,:,J) * EPH
     end if
 end do
-
+! write(20,*)S(0),FN(:,:,0)
 END SUBROUTINE HSSPHERE_KER
     
 SUBROUTINE VerticalFieldSphericalCoefficients(NTERMS,PSIA,PSIF,YHAT,ZHAT,EZNM,HZNM)
