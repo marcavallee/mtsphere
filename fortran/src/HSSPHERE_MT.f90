@@ -28,7 +28,7 @@ use precision
 
  INTEGER NTERMS,NLAT,NLON,NLYR,JZ,SLYR,RLYR,IC,N,M,MP,INT,JLAT,JLON,NW
  REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,ZR,RADIUS,ZLAT,LMBDA,THETA, &
-                RHO, PHI
+                RHO, PHI, XGAUSS(NLAT), WGAUSS(NLAT)
  
  COMPLEX(KIND=QL) YHAT(0:NLYR), zhat(0:NLYR), RTE(NTERMS), RTM(NTERMS), EMPHI, &
                    E(2,NTERMS,-1:1,NLAT,NLON,3), H(2,NTERMS,-1:1,NLAT,NLON,3), &
@@ -55,8 +55,9 @@ use precision
         END DO
     END IF
  
+    call gauss_legendre(nlat, xgauss, wgauss)
     do JLAT = 1, NLAT
-        THETA = ( JLAT - 1 ) * PI / ( NLAT - 1 )
+        theta = ACOS(XGAUSS(JLAT))
         ZLAT = RADIUS * COS(THETA) + ZR
         RHO = RADIUS * SIN(THETA)
         if ( RHO < 0.01_QL ) RHO = 0.01_QL
@@ -95,7 +96,7 @@ implicit NONE
  REAL(KIND=QL) DEL_JN,Y,RHO_JN,LMBDA,RHO,THKD(NLYR-1),DPTHL(NLYR),ZS,ZR
  COMPLEX(KIND=QL) ET(2,NTERMS,-1:1,-2:2,3), HT(2,NTERMS,-1:1,-2:2,3), &
     RTM(NTERMS),RTE(NTERMS),YHAT(0:NLYR),ZHAT(0:NLYR), &
-    FN(2,0:NLYR), AN(2,0:NLYR)
+    FN(2,2,0:NLYR), AN(2,2,0:NLYR)
  LOGICAL JUMP
 
  DEL_JN = LOG (10.D0) / DBLE (NDEC_JN)
@@ -149,7 +150,7 @@ contains
                      EM(2,NTERMS,-1:1,-2:2,3), HM(2,NTERMS,-1:1,-2:2,3), &
                      EW(2,NTERMS,-1:1,-2:2,3), HW(2,NTERMS,-1:1,-2:2,3) )
      CALL MTMultipleSourceCoefficients(NTERMS,LMBDA,YHAT(SLYR),ZHAT(SLYR),RTM,RTE,AZ,FZ)
-     CALL MTMultipleSourceFields(NTERMS,NLYR,DPTHL,RLYR,LMBDA,ZR,yhat(RLYR),zhat(RLYR), &
+     CALL MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SLYR,RLYR,LMBDA,ZR,yhat(RLYR),zhat(RLYR), &
          AZ,FZ,AN,FN,EM,HM)
       
     ! Calcul des champs
@@ -250,8 +251,7 @@ SUBROUTINE MTMultipleSourceCoefficients(NTERMS,LMBDA,YHAT,ZHAT,RTM,RTE,AZ,FZ)
     
 END SUBROUTINE MTMultipleSourceCoefficients
 
-
-SUBROUTINE MTMultipleSourceFields(NTERMS,NLYR,DPTHL,RLYR,LMBDA,Z,YHAT,ZHAT,AZ,FZ,AN,FN,EM,HM)
+SUBROUTINE MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SLYR,RLYR,LMBDA,ZR,YHAT,ZHAT,AZ,FZ,AN,FN,EM,HM)
 
 ! Computation of the spherical coefficients for cylindrical fields
 
@@ -281,13 +281,13 @@ SUBROUTINE MTMultipleSourceFields(NTERMS,NLYR,DPTHL,RLYR,LMBDA,Z,YHAT,ZHAT,AZ,FZ
 use precision
 
     IMPLICIT NONE
-    INTEGER NTERMS,NLYR,RLYR,ID,IC,N,M,IL
-    REAL(KIND=QL)    LMBDA, lmbdasq, DPTHL(NLYR), Z
+    INTEGER NTERMS,NLYR,SLYR,RLYR,ID,IC,N,M,IL,ISR
+    REAL(KIND=QL)    LMBDA, lmbdasq, DPTHL(NLYR), ZR
     COMPLEX(KIND=QL) EM(2,NTERMS,-1:1,-2:2,3), DZ,  &
                      HM(2,NTERMS,-1:1,-2:2,3), &
                      AZ(2,2,NTERMS,-2:2), &
                      FZ(2,2,NTERMS,-2:2), &
-                     YHAT, ZHAT, U, DECAY, RTM, RTE, AN(2,0:NLYR), FN(2,0:NLYR), &
+                     YHAT, ZHAT, U, DECAY, RTM, RTE, AN(2,2,0:NLYR), FN(2,2, 0:NLYR), &
                      AZID(-1:1), FZID(-1:1), AZDX(-2:2), AZDY(-2:2), FZDX(-2:2), FZDY(-2:2)
         
     LMBDASQ = LMBDA ** 2
@@ -298,40 +298,42 @@ use precision
         if ( RLYR == 0 .AND. ID == 1 ) CYCLE
         if ( RLYR == NLYR .AND. ID == 2 ) CYCLE
         if ( ID == 1 ) THEN
-            DECAY = EXP ( - U * ( Z - DPTHL(RLYR) ) )
+            DECAY = EXP ( - U * ( ZR - DPTHL(RLYR) ) )
         ELSE if ( RLYR == 0 ) then
-                DECAY = EXP ( U * ( Z - DPTHL(1) ) )
+                DECAY = EXP ( U * ( ZR - DPTHL(1) ) )
         else
-                DECAY = EXP ( U * ( Z - DPTHL(RLYR) ) )
+                DECAY = EXP ( U * ( ZR - DPTHL(RLYR) ) )
         end if
-        RTM = AN(ID,RLYR) * DECAY
-        RTE = FN(ID,RLYR) * DECAY
         if ( ID == 1 ) then
             DZ = - U
         else
             DZ = U
         end IF
-        do IC = 1, 2
-            do n = 1, NTERMS
-                do M = -1, 1, 2
-                    AZID = (0._QL,0._QL)
-                    FZID = (0._QL,0._QL)
-                    AZID(M) = AZ(ID,IC,N,M)
-                    FZID(M) = FZ(ID,IC,N,M)
-                    call cylindricalderivatives(1, 1, LMBDA, AZID, AZDX)
-                    call Cylindricalderivatives(1, 2, LMBDA, AZID, AZDY)
-                    call cylindricalderivatives(1, 1, LMBDA, FZID, FZDX)
-                    call cylindricalderivatives(1, 2, LMBDA, FZID, FZDY)
-                    EM(IC,N,M,:,1) = EM(IC,N,M,:,1) + RTM * AZDX     * DZ  / yhat
-                    EM(IC,N,M,:,2) = EM(IC,N,M,:,2) + RTM * AZDY     * DZ  / yhat
-                    EM(IC,N,M,M,3) = EM(IC,N,M,M,3) + RTM * AZ(ID,IC,N,M) * LMBDASQ / yhat
-                    HM(IC,N,M,:,1) = HM(IC,N,M,:,1) + RTM * AZDY
-                    HM(IC,N,M,:,2) = HM(IC,N,M,:,2) - RTM * AZDX
-                    EM(IC,N,M,:,1) = EM(IC,N,M,:,1) - RTE * FZDY
-                    EM(IC,N,M,:,2) = EM(IC,N,M,:,2) + RTE * FZDX
-                    HM(IC,N,M,:,1) = HM(IC,N,M,:,1) + RTE * FZDX     * DZ  / zhat
-                    HM(IC,N,M,:,2) = HM(IC,N,M,:,2) + RTE * FZDY     * DZ  / zhat
-                    HM(IC,N,M,M,3) = HM(IC,N,M,M,3) + RTE * FZ(ID,IC,N,M) * LMBDASQ / zhat
+        do isr = 1, 2
+            RTM = AN(ID,ISR,RLYR) * DECAY
+            RTE = FN(ID,ISR,RLYR) * DECAY
+            do IC = 1, 2
+                do n = 1, NTERMS
+                    do M = -1, 1, 2
+                        AZID = (0._QL,0._QL)
+                        FZID = (0._QL,0._QL)
+                        AZID(M) = AZ(iSr,IC,N,M)
+                        FZID(M) = FZ(ISr,IC,N,M)
+                        call cylindricalderivatives(1, 1, LMBDA, AZID, AZDX)
+                        call Cylindricalderivatives(1, 2, LMBDA, AZID, AZDY)
+                        call cylindricalderivatives(1, 1, LMBDA, FZID, FZDX)
+                        call cylindricalderivatives(1, 2, LMBDA, FZID, FZDY)
+                        EM(IC,N,M,:,1) = EM(IC,N,M,:,1) + RTM * AZDX     * DZ  / yhat
+                        EM(IC,N,M,:,2) = EM(IC,N,M,:,2) + RTM * AZDY     * DZ  / yhat
+                        EM(IC,N,M,M,3) = EM(IC,N,M,M,3) + RTM * AZ(ISr,IC,N,M) * LMBDASQ / yhat
+                        HM(IC,N,M,:,1) = HM(IC,N,M,:,1) + RTM * AZDY
+                        HM(IC,N,M,:,2) = HM(IC,N,M,:,2) - RTM * AZDX
+                        EM(IC,N,M,:,1) = EM(IC,N,M,:,1) - RTE * FZDY
+                        EM(IC,N,M,:,2) = EM(IC,N,M,:,2) + RTE * FZDX
+                        HM(IC,N,M,:,1) = HM(IC,N,M,:,1) + RTE * FZDX     * DZ  / zhat
+                        HM(IC,N,M,:,2) = HM(IC,N,M,:,2) + RTE * FZDY     * DZ  / zhat
+                        HM(IC,N,M,M,3) = HM(IC,N,M,M,3) + RTE * FZ(ISr,IC,N,M) * LMBDASQ / zhat
+                    end do
                 end do
             end do
         end do
@@ -455,7 +457,7 @@ SUBROUTINE MTSPHERE_HNK_SingleSource (NTERMS,SXLYR,RXLYR,PSIA,PSIF, &
  COMPLEX(KIND=QL) Eh(-2:2,3),Hh(-2:2,3), &
     RTM,RTE,P,YHAT(0:NLYR),ZHAT(0:NLYR), & 
     PSIA(NTERMS,-1:1), PSIF(NTERMS,-1:1), &
-    FN(2,0:NLYR), AN(2,0:NLYR)
+    FN(2,2,0:NLYR), AN(2,2,0:NLYR)
  LOGICAL JUMP
 
  DEL_JN = LOG (10.D0) / DBLE (NDEC_JN)
@@ -621,13 +623,13 @@ SUBROUTINE MTSingleSourceFields(NLYR,DPTHL,RLYR,ZR,LMBDA,YHAT,ZHAT,AZ,FZ,AN,FN,E
     use PRECISION
 
     IMPLICIT NONE
-    INTEGER NLYR,RLYR,ID,IC,N,M
+    INTEGER NLYR,RLYR,ID,IC,N,M,ISR
     REAL(KIND=QL)    Il, LMBDA, lmbdasq, DPTHL(NLYR), ZR
     COMPLEX(KIND=QL) EM(3,-2:2), HM(3,-2:2), &
                      AZ(2,-2:2), FZ(2,-2:2), &
                      yhat, ZHAT, U, DZ(2), DECAY, RTM, RTE, &
-                     AN(2,0:NLYR), FN(2,0:NLYR), &
-                     AZID(-2:2), FZID(-2:2), &
+                     AN(2,2,0:NLYR), FN(2,2,0:NLYR), &
+                     AZISR(-1:1), FZISR(-1:1), &
                      AZDX(-2:2), AZDY(-2:2), FZDX(-2:2), FZDY(-2:2)
         
     LMBDASQ = LMBDA ** 2
@@ -645,28 +647,32 @@ SUBROUTINE MTSingleSourceFields(NLYR,DPTHL,RLYR,ZR,LMBDA,YHAT,ZHAT,AZ,FZ,AN,FN,E
         ELSE
             DECAY = EXP (   U * ( ZR - DPTHL(RLYR) ) )
         end IF
-        RTM = AN(ID,RLYR) * DECAY
-        RTE = FN(ID,RLYR) * DECAY
-        AZID = ZERO
-        FZID = ZERO
-        do M = -1, 1, 2
-            AZID(M) = AZ(ID,M)
-            FZID(M) = FZ(ID,M)
+        do isr = 1, 2
+            RTM = AN(ID,ISR,RLYR) * DECAY
+            RTE = FN(ID,ISR,RLYR) * DECAY
+!            write(20,*)U,ISR,RTM,RTE
+!            write(20,*)ID,FN(ID,ISR,RLYR)
+            AZISR = ZERO
+            FZISR = ZERO
+            do M = -1, 1, 2
+                AZISR(M) = AZ(ISR,M)
+                FZISR(M) = FZ(ISR,M)
+            end do
+            call CylindricalDerivatives(1,1,LMBDA,AZISR,AZDX)
+            call CylindricalDerivatives(1,2,LMBDA,AZISR,AZDY)
+            call CylindricalDerivatives(1,1,LMBDA,FZISR,FZDX)
+            call CylindricalDerivatives(1,2,LMBDA,FZISR,FZDY)
+            EM(1,:) = EM(1,:) + RTM * AZDX     * DZ(ID)  / yhat
+            EM(2,:) = EM(2,:) + RTM * AZDY     * DZ(ID)  / yhat
+            EM(3,:) = EM(3,:) + RTM * AZ(ISR,:)    * LMBDASQ / yhat
+            HM(1,:) = HM(1,:) + RTM * AZDY
+            HM(2,:) = HM(2,:) - RTM * AZDX
+            EM(1,:) = EM(1,:) - RTE * FZDY
+            EM(2,:) = EM(2,:) + RTE * FZDX
+            HM(1,:) = HM(1,:) + RTE * FZDX     * DZ(ID)  / zhat
+            HM(2,:) = HM(2,:) + RTE * FZDY     * DZ(ID)  / zhat
+            HM(3,:) = HM(3,:) + RTE * FZ(ISR,:)     * LMBDASQ / zhat
         end do
-        call CylindricalDerivatives(1,1,LMBDA,AZID(-1:1),AZDX)
-        call CylindricalDerivatives(1,2,LMBDA,AZID(-1:1),AZDY)
-        call CylindricalDerivatives(1,1,LMBDA,FZID(-1:1),FZDX)
-        call CylindricalDerivatives(1,2,LMBDA,FZID(-1:1),FZDY)
-        EM(1,:) = EM(1,:) + RTM * AZDX     * DZ(ID)  / yhat
-        EM(2,:) = EM(2,:) + RTM * AZDY     * DZ(ID)  / yhat
-        EM(3,:) = EM(3,:) + RTM * AZID     * LMBDASQ / yhat
-        HM(1,:) = HM(1,:) + RTM * AZDY
-        HM(2,:) = HM(2,:) - RTM * AZDX
-        EM(1,:) = EM(1,:) - RTE * FZDY
-        EM(2,:) = EM(2,:) + RTE * FZDX
-        HM(1,:) = HM(1,:) + RTE * FZDX     * DZ(ID)  / zhat
-        HM(2,:) = HM(2,:) + RTE * FZDY     * DZ(ID)  / zhat
-        HM(3,:) = HM(3,:) + RTE * FZID     * LMBDASQ / zhat
     END DO
 
 END SUBROUTINE MTSingleSourceFields   
