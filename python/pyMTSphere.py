@@ -72,8 +72,8 @@ class pyMTSphere:
         self.mf1file = None
         self.mf2file = None
         self.pxy = np.array([])
-        self.version = '2.1.0'
-        self.releasedate = 'July 2026'
+        self.version = '2.1.1'
+        self.releasedate = 'August 2026'
         self.htarg = {'dlf':'key_401_2009'} #{'dlf': 'anderson_801_1982'}
         self.mtplot = MTPlot(self)
         self.nterms = 6
@@ -409,6 +409,12 @@ class pyMTSphere:
         self.nterms = int(columns[1])
         self.nx = int(columns[2])
         self.ny = int(columns[3])
+        if self.nx < 0 or self.ny < 0:
+            self.position = True
+            self.nx = abs(self.nx)
+            self.ny = abs(self.ny)
+        else:
+            self.position = False
         columns = cflfile.readline().split()
         self.nf = int(columns[0])
         self.minfreq = float(columns[1])
@@ -423,12 +429,43 @@ class pyMTSphere:
             self.layerlist[i].resistivity = float(columns[0])
             if i < self.nlyr - 1:
                 self.layerlist[i].thickness = float(columns[1])
-        columns = cflfile.readline().split()
-        self.xmin = float(columns[0])
-        self.xmax = float(columns[1])
-        columns = cflfile.readline().split()
-        self.ymin = float(columns[0])
-        self.ymax = float(columns[1])
+        x = np.zeros(self.nx)
+        y = np.zeros(self.ny)
+        if self.position:
+            columns = cflfile.readline().split()
+            for i in range(self.nx):
+                x[i] = float(columns[i])
+            columns = cflfile.readline().split()
+            for i in range(self.ny):
+                y[i] = float(columns[i])
+        else:
+            columns = cflfile.readline().split()
+            self.xmin = float(columns[0])
+            self.xmax = float(columns[1])
+            columns = cflfile.readline().split()
+            self.ymin = float(columns[0])
+            self.ymax = float(columns[1])
+            if self.nx > 1:
+                dx = ( self.xmax - self.xmin ) / ( self.nx - 1 )
+            else:
+                dx = 0
+            if self.ny > 1:
+                dy = ( self.ymax - self.ymin ) / ( self.ny - 1 )
+            else:
+                dy = 0
+            for jx in range(self.nx):
+                x[jx] = self.xmin + jx * dx
+            for jy in range(self.ny):
+                y[jy] = self.ymin + jy * dy
+        self.pxy = np.zeros((self.nx, self.ny, 3))
+        for jx in range(self.nx):
+            for jy in range(self.ny):
+                self.pxy[jx,jy, 0] = x[jx]
+                self.pxy[jx,jy, 1] = y[jy]
+        self.xmin = x.min()
+        self.xmax = x.max()
+        self.ymin = y.min()
+        self.ymax = y.max()
         cflfile.close()
         self.refreshparameters()
 
@@ -455,7 +492,6 @@ class pyMTSphere:
 
     def setvectors(self):
         self.freq = np.zeros(self.nf)
-        self.pxy = np.zeros((self.nx, self.ny, 3))
         self.zhat = np.zeros((self.nf, self.nlyr))
         self.imp = np.zeros((self.nf,self.nx,self.ny,3,2))
         self.res = np.zeros(self.nlyr+1)
@@ -469,18 +505,6 @@ class pyMTSphere:
             else:
                 for i in range(self.nf):
                     self.freq[i] = self.minfreq * ( self.maxfreq / self.minfreq ) ** ( float(i) / float(self.nf-1) )
-        if self.nx > 1:
-            dx = ( self.xmax - self.xmin ) / ( self.nx - 1 )
-        else:
-            dx = 0
-        if self.ny > 1:
-            dy = ( self.ymax - self.ymin ) / ( self.ny - 1 )
-        else:
-            dy = 0
-        for jx in range(self.nx):
-            for jy in range(self.ny):
-                self.pxy[jx,jy, 0] = self.xmin + jx * dx
-                self.pxy[jx,jy, 1] = self.ymin + jy * dy
         for i in range(self.nlyr):
             self.res[i+1] = self.layerlist[i].resistivity
             if i < self.nlyr-1:
