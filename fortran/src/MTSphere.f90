@@ -1,4 +1,4 @@
-!  PROGRAM MTSPHERE Version 2.1.0 July 2026
+!  PROGRAM MTSPHERE Version 2.1.1 August 2026
 !    
 !    
 !        Developed by: Marc A. Vallée
@@ -50,10 +50,11 @@ IMPLICIT NONE
     CHARACTER(LEN=60) PVC
     CHARACTER(LEN=120) INP,TITLE
     DATA MONTH /'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'/
-    DATA PVC /'MTSphere - Version 2.1.0 - July 2026'/
-    REAL(KIND=QL), ALLOCATABLE :: PXY(:,:,:), APPRES(:,:,:,:,:), PHASE(:,:,:,:,:)
+    DATA PVC /'MTSphere - Version 2.1.1 - August 2026'/
+    REAL(KIND=QL), ALLOCATABLE :: X(:), Y(:), PXY(:,:,:), APPRES(:,:,:,:,:), PHASE(:,:,:,:,:)
     COMPLEX(KIND=QL), ALLOCATABLE :: ZHAT(:,:),E(:,:,:),IMP(:,:,:,:,:), &
                     ES(:,:,:,:,:),HS(:,:,:,:,:),ET(:,:,:,:,:),HT(:,:,:,:,:)
+    LOGICAL POSITION
     
     CONTAINS
     
@@ -89,10 +90,17 @@ IMPLICIT NONE
     WRITE(NW,'(/1X,A)') TRIM (TITLE)
         
     READ(NR,*) NLYR, NTERMS, NX, NY
+    if ( NX < 0 .OR. NY < 0 ) then
+        POSITION = .TRUE.
+        NX = ABS(NX)
+        NY = ABS(NY)
+    else
+        POSITION = .FALSE.
+    end IF
     READ(NR,*) NF, MINFREQ, MAXFREQ, LOGARITHMIC
     READ(NR,*) RADIUS, DEPTH, SPHRES
     
-    ALLOCATE ( RES(NLYR), THK(NLYR-1), FREQ(NF), PXY(NX,NY,3) )
+    ALLOCATE ( RES(NLYR), THK(NLYR-1), FREQ(NF), X(NX), Y(NY), PXY(NX,NY,3) )
     ALLOCATE ( ZHAT(NF,NLYR), E(NF,0:NLYR,2), APPRES(NF,NX,NY,2,2), & 
         PHASE(NF,NX,NY,2,2), IMP(NF,NX,NY,3,2), ES(NF,NX,NY,3,2), HS(NF,NX,NY,3,2), &
                                                 ET(NF,NX,NY,3,2), HT(NF,NX,NY,3,2) )
@@ -116,26 +124,37 @@ IMPLICIT NONE
     END IF
     WRITE(NW,'('' Frequencies:'',100G15.7)')(FREQ(I),I=1,NF)
     
-    READ(NR,*)XMIN, XMAX
-    READ(NR,*)YMIN, YMAX
-    if ( NX > 1 ) THEN
-        DX = ( XMAX - XMIN ) / ( NX - 1 )
+    if ( POSITION ) THEN
+        read(NR,*)X
+        read(NR,*)Y
     else
-        DX = 0
-    end if
-    if ( NY > 1 ) THEN
-        DY = ( YMAX - YMIN ) / ( NY - 1 )
-    else
-        dy = 0
-    end if
-    
+        READ(NR,*)XMIN, XMAX
+        READ(NR,*)YMIN, YMAX
+        if ( NX > 1 ) THEN
+            DX = ( XMAX - XMIN ) / ( NX - 1 )
+        else
+            DX = 0
+        end if
+        if ( NY > 1 ) THEN
+            DY = ( YMAX - YMIN ) / ( NY - 1 )
+        else
+            dy = 0
+        end if
+        DO JX = 1, NX
+            X(JX) = XMIN + ( JX - 1 ) * DX
+        end DO
+        do JY = 1, NY
+            Y(JY) = YMIN + ( JY - 1 ) * DY
+        end do
+    end IF
+        
     PXY = 0._QL
     DO JX = 1, NX
         DO JY = 1, NY
-            PXY(JX,JY,1) = XMIN + ( JX - 1 ) * DX
-            PXY(JX,JY,2) = YMIN + ( JY - 1 ) * DY
+            PXY(JX,JY,1) = X(JX)
+            PXY(JX,JY,2) = Y(JY)
         END DO
-    END DO
+    END do
         
   1 FORMAT (T25,A/T25,'Developed by: Marc A. Vallee'/T25,'for: Geo Data Solutions GDS Inc.'///)   
   2 FORMAT (T1,79('-'))    
