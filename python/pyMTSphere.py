@@ -10,7 +10,7 @@ matplotlib.use('tkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from layeredearthfunctions import PlaneWaveImpedance, apparentresistivity
-from mtsphere3d import mtsphere3d
+from mtsphere3d import mtsphere3d, getimpedance
 from mtplot import MTPlot
 from tkinter import filedialog,messagebox
 from waitwindow import WaitWindow
@@ -71,10 +71,10 @@ class pyMTSphere:
         self.outfile = None
         self.mf1file = None
         self.mf2file = None
-        self.pxy = np.array([])
-        self.version = '2.1.1'
-        self.releasedate = 'August 2026'
-        self.htarg = {'dlf':'key_401_2009'} #{'dlf': 'anderson_801_1982'}
+        self.pxyd = np.array([])
+        self.version = '2.2.0'
+        self.releasedate = 'September 2026'
+        self.htarg = {'dlf':'key_401_2009'}
         self.mtplot = MTPlot(self)
         self.nterms = 6
         self.nlyr = 1
@@ -87,10 +87,13 @@ class pyMTSphere:
         self.sphres = 1
         self.nx = 41
         self.ny = 1
+        self.nd = 1
         self.xmin = -400
         self.xmax = 400
         self.ymin = 0
         self.ymax = 0
+        self.dmin = 0
+        self.dmax = 0
         self.layerlist = [Layer(self.nlyr)]
         self.ntermsvariable = tk.IntVar()
         self.minfreqvariable = tk.DoubleVar()
@@ -103,10 +106,13 @@ class pyMTSphere:
         self.sphresvariable = tk.DoubleVar()
         self.nxvariable = tk.IntVar()
         self.nyvariable = tk.IntVar()
+        self.ndvariable = tk.IntVar()
         self.xminvariable = tk.DoubleVar()
         self.xmaxvariable = tk.DoubleVar()
         self.yminvariable = tk.DoubleVar()
         self.ymaxvariable = tk.DoubleVar()
+        self.dminvariable = tk.DoubleVar()
+        self.dmaxvariable = tk.DoubleVar()
 
     def displaymainframe(self):
         self.mainframe.destroy()
@@ -198,6 +204,12 @@ class pyMTSphere:
         except:
             return
 
+    def updatend(self, *args):
+        try:
+            self.nd = self.ndvariable.get()
+        except:
+            return
+
     def updatexmin(self, *args):
         try:
             self.xmin = self.xminvariable.get()
@@ -219,6 +231,18 @@ class pyMTSphere:
     def updateymax(self, *args):
         try:
             self.ymax = self.ymaxvariable.get()
+        except:
+            return
+
+    def updatedmin(self, *args):
+        try:
+            self.dmin = self.dminvariable.get()
+        except:
+            return
+
+    def updatedmax(self, *args):
+        try:
+            self.dmax = self.dmaxvariable.get()
         except:
             return
 
@@ -321,6 +345,22 @@ class pyMTSphere:
         self.nyvariable.trace('w', self.updateny)
         self.yminvariable.trace('w',self.updateymin)
         self.ymaxvariable.trace('w',self.updateymax)
+        row += 1
+        label = tk.Label(parameterframe, text='Depth number')
+        label.grid(row=row, column=0, sticky=tk.W)
+        entry = tk.Entry(parameterframe, textvariable=self.ndvariable)
+        entry.grid(row=row, column=1)
+        label = tk.Label(parameterframe, text='D minimum')
+        label.grid(row=row, column=2, sticky=tk.W)
+        entry = tk.Entry(parameterframe, textvariable=self.dminvariable)
+        entry.grid(row=row, column=3)
+        label = tk.Label(parameterframe, text='D maximum')
+        label.grid(row=row, column=4, sticky=tk.W)
+        entry = tk.Entry(parameterframe, textvariable=self.dmaxvariable)
+        entry.grid(row=row, column=5)
+        self.ndvariable.trace('w',self.updatend)
+        self.dminvariable.trace('w',self.updatedmin)
+        self.dmaxvariable.trace('w',self.updatedmax)
         self.refreshparameters()
 
     def displaycommandframe(self,commandframe):
@@ -338,10 +378,13 @@ class pyMTSphere:
         button = tk.Button(commandframe, text='Plot Sounding', command=self.mtplot.plotsounding)
         button.grid(row=0, column=column, sticky=tk.W)
         column += 1
-        button = tk.Button(commandframe, text='Plot X Profile', command=self.mtplot.plotxprofile)
+        button = tk.Button(commandframe, text='Plot MT Profiles', command=self.mtplot.plotmtprofiles)
         button.grid(row=0, column=column, sticky=tk.W)
         column += 1
-        button = tk.Button(commandframe, text='Plot Y Profile', command=self.mtplot.plotyprofile)
+        button = tk.Button(commandframe, text='Plot Field Profiles', command=self.mtplot.plotfieldprofiles)
+        button.grid(row=0, column=column, sticky=tk.W)
+        column = column + 1
+        button = tk.Button(commandframe, text='Plot Field Plane', command=self.mtplot.plotfieldplane)
         button.grid(row=0, column=column, sticky=tk.W)
         column = column + 1
         button = tk.Button(commandframe, text='Quit', command=self.quit)
@@ -389,16 +432,17 @@ class pyMTSphere:
                 file.write(' ! RES\n')
         file.write(' {} {} ! XMIN, XMAX\n'.format(self.xmin,self.xmax))
         file.write(' {} {} ! YMIN, YMAX\n'.format(self.ymin,self.ymax))
+        file.write(' {} {} ! DMIN, DMAX\n'.format(self.dmin,self.dmax))
         file.close()
 
     def readcflfile(self):
         if len(self.directory) == 0:
             messagebox.showerror('MTSphere','Directory not set')
-            return
+            return False
         filename = os.path.join(self.directory, 'MTSphere.cfl')
         if not os.path.exists(filename):
             messagebox.showwarning('MTSphere','No model file')
-            return
+            return False
         cflfile = open(filename, 'r')
         self.title = cflfile.readline().rstrip()
         columns = cflfile.readline().split()
@@ -409,10 +453,12 @@ class pyMTSphere:
         self.nterms = int(columns[1])
         self.nx = int(columns[2])
         self.ny = int(columns[3])
+        self.nd = int(columns[4])
         if self.nx < 0 or self.ny < 0:
             self.position = True
             self.nx = abs(self.nx)
             self.ny = abs(self.ny)
+            self.nd = abs(self.nd)
         else:
             self.position = False
         columns = cflfile.readline().split()
@@ -431,6 +477,7 @@ class pyMTSphere:
                 self.layerlist[i].thickness = float(columns[1])
         x = np.zeros(self.nx)
         y = np.zeros(self.ny)
+        d = np.zeros(self.nd)
         if self.position:
             columns = cflfile.readline().split()
             for i in range(self.nx):
@@ -438,6 +485,9 @@ class pyMTSphere:
             columns = cflfile.readline().split()
             for i in range(self.ny):
                 y[i] = float(columns[i])
+            columns = cflfile.readline().split()
+            for i in range(self.nd):
+                d[i] = float(columns[i])
         else:
             columns = cflfile.readline().split()
             self.xmin = float(columns[0])
@@ -445,6 +495,9 @@ class pyMTSphere:
             columns = cflfile.readline().split()
             self.ymin = float(columns[0])
             self.ymax = float(columns[1])
+            columns = cflfile.readline().split()
+            self.dmin = float(columns[0])
+            self.dmax = float(columns[1])
             if self.nx > 1:
                 dx = ( self.xmax - self.xmin ) / ( self.nx - 1 )
             else:
@@ -453,21 +506,32 @@ class pyMTSphere:
                 dy = ( self.ymax - self.ymin ) / ( self.ny - 1 )
             else:
                 dy = 0
+            if self.nd > 1:
+                dd = ( self.dmax - self.dmin ) / ( self.nd - 1 )
+            else:
+                dd = 0
             for jx in range(self.nx):
                 x[jx] = self.xmin + jx * dx
             for jy in range(self.ny):
                 y[jy] = self.ymin + jy * dy
-        self.pxy = np.zeros((self.nx, self.ny, 3))
+            for jd in range(self.nd):
+                d[jd] = self.dmin + jd * dd
+        self.pxyd = np.zeros((self.nx, self.ny, self.nd, 3))
         for jx in range(self.nx):
             for jy in range(self.ny):
-                self.pxy[jx,jy, 0] = x[jx]
-                self.pxy[jx,jy, 1] = y[jy]
+                for jd in range(self.nd):
+                    self.pxyd[jx,jy,jd, 0] = x[jx]
+                    self.pxyd[jx,jy,jd, 1] = y[jy]
+                    self.pxyd[jx,jy,jd, 2] = d[jd]
         self.xmin = x.min()
         self.xmax = x.max()
         self.ymin = y.min()
         self.ymax = y.max()
+        self.dmin = d.min()
+        self.dmax = d.max()
         cflfile.close()
         self.refreshparameters()
+        return True
 
     def refreshparameters(self):
         self.titlevariable.set(self.title)
@@ -476,6 +540,7 @@ class pyMTSphere:
         self.ntermsvariable.set(self.nterms)
         self.nxvariable.set(self.nx)
         self.nyvariable.set(self.ny)
+        self.ndvariable.set(self.nd)
         self.nfvariable.set(self.nf)
         self.minfreqvariable.set(self.minfreq)
         self.maxfreqvariable.set(self.maxfreq)
@@ -489,6 +554,8 @@ class pyMTSphere:
         self.xmaxvariable.set(self.xmax)
         self.yminvariable.set(self.ymin)
         self.ymaxvariable.set(self.ymax)
+        self.dminvariable.set(self.dmin)
+        self.dmaxvariable.set(self.dmax)
 
     def setvectors(self):
         self.freq = np.zeros(self.nf)
@@ -572,7 +639,7 @@ class pyMTSphere:
                 break
             self.outfile.write('{}'.format(line))
         cflfile.seek(0)
-        self.outfile.write('\n---------------------------------------------------------------------------------\n\n')
+        self.outfile.write('\n\n---------------------------------------------------------------------------------\n\n')
         self.title = cflfile.readline().rstrip()
         self.outfile.write('{}'.format(self.title))
         columns = cflfile.readline().split()
@@ -580,6 +647,7 @@ class pyMTSphere:
         self.nterms = int(columns[1])
         self.nx = int(columns[2])
         self.ny = int(columns[3])
+        self.nd = int(columns[4])
         columns = cflfile.readline().split()
         self.nf = int(columns[0])
         self.minfreq = float(columns[1])
@@ -594,7 +662,8 @@ class pyMTSphere:
         self.freq = np.zeros(self.nf)
         x = np.zeros(self.nx)
         y = np.zeros(self.ny)
-        self.pxy = np.zeros((self.nx, self.ny, 3))
+        d = np.zeros(self.nd)
+        self.pxyd = np.zeros((self.nx, self.ny, self.nd, 3))
         self.zhat = np.zeros((self.nf, self.nlyr))
         self.imp = np.zeros((self.nf,self.nx,self.ny,3,2))
         self.outfile.write(' Number of layers: {}\n'.format(self.nlyr))
@@ -631,10 +700,15 @@ class pyMTSphere:
         columns = cflfile.readline().split()
         self.ymin = float(columns[0])
         self.ymax = float(columns[1])
+        columns = cflfile.readline().split()
+        self.dmin = float(columns[0])
+        self.dmax = float(columns[1])
         for jx in range(self.nx):
             for jy in range(self.ny):
-                self.pxy[jx,jy, 0] = x[jx]
-                self.pxy[jx,jy, 1] = y[jy]
+                for jd in range(self.nd):
+                    self.pxyd[jx,jy,jd,0] = x[jx]
+                    self.pxyd[jx,jy,jd,1] = y[jy]
+                    self.pxyd[jx,jy,jd,2] = z[jd]
         cflfile.close()
         self.refreshparameters()
 
@@ -666,16 +740,19 @@ class pyMTSphere:
                 nw1.write('{:>15s}{:>10s}{:>10s}{:>15s}{:>15s}{:>15s}{:>15s}\n'. \
                         format('Frequency', 'X', 'Y', 'Apparent_res.', 'Phase', 'Imp.(real)', 'Imp.(imag)'))
                 for jf in range(self.nf):
-                    for jx in range(self.nx):
-                        for jy in range(self.ny):
-                            nw.write('{:15.7g}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
-                                     format(self.freq[jf],self.pxy[jx,jy,0],self.pxy[jx,jy,1], \
-                                            self.appres[jf,jx,jy,i,j], self.phase[jf,jx,jy,i,j],\
-                                            self.imp[jf,jx,jy,i,j].real, self.imp[jf,jx,jy,i,j].imag))
-                            nw1.write('{:15.7g}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
-                                     format(self.freq[jf],self.pxy[jx,jy,0],self.pxy[jx,jy,1], \
-                                            self.appres[jf,jx,jy,i,j], self.phase[jf,jx,jy,i,j],\
-                                            self.imp[jf,jx,jy,i,j].real, self.imp[jf,jx,jy,i,j].imag))
+                    for jd in range(self.nd):
+                        for jx in range(self.nx):
+                            for jy in range(self.ny):
+                                nw.write('{:15.7g}{:10.1f}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
+                                         format(self.freq[jf],\
+                                                self.pxyd[jx,jy,jd,0],self.pxyd[jx,jy,jd,1],self.pxyd[jx,jy,jd,2], \
+                                                self.appres[jf,jx,jy,jd,i,j], self.phase[jf,jx,jy,jd,i,j],\
+                                                self.imp[jf,jx,jy,jd,i,j].real, self.imp[jf,jx,jy,jd,i,j].imag))
+                                nw1.write('{:15.7g}{:10.1f}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
+                                         format(self.freq[jf],\
+                                                self.pxyd[jx,jy,jd,0],self.pxyd[jx,jy,jd,1],self.pxyd[jx,jy,jd,2], \
+                                                self.appres[jf,jx,jy,jd,i,j], self.phase[jf,jx,jy,jd,i,j],\
+                                                self.imp[jf,jx,jy,jd,i,j].real, self.imp[jf,jx,jy,jd,i,j].imag))
 
         nw.write('\n Tipper\n')
         nw1.write('\n Tipper\n')
@@ -684,16 +761,17 @@ class pyMTSphere:
         nw1.write('{:>15s}{:>10s}{:>10s}{:>15s}{:>15s}{:>15s}{:>15s}\n'. \
          format('Frequency', 'X', 'Y', 'Kzx(real)', 'Kzx(imag)', 'Kzy(real)', 'Kzy(imag'))
         for jf in range(self.nf):
-            for jx in range(self.nx):
-                for jy in range(self.ny):
-                    nw.write('{:15.7g}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7}\n'.\
-                             format(self.freq[jf],self.pxy[jx,jy,0],self.pxy[jx,jy,1], \
-                                    self.imp[jf,jx,jy,2,0].real,self.imp[jf,jx,jy,2,0].imag,
-                                    self.imp[jf,jx,jy,2,1].real,self.imp[jf,jx,jy,2,1].imag))
-                    nw1.write('{:15.7g}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7}\n'. \
-                             format(self.freq[jf], self.pxy[jx, jy, 0], self.pxy[jx, jy, 1], \
-                                    self.imp[jf, jx, jy, 2, 0].real, self.imp[jf, jx, jy, 2, 0].imag,
-                                    self.imp[jf, jx, jy, 2, 1].real, self.imp[jf, jx, jy, 2, 1].imag))
+            for jd in range(self.nd):
+                for jx in range(self.nx):
+                    for jy in range(self.ny):
+                        nw.write('{:15.7g}{:10.1f}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7}\n'.\
+                             format(self.freq[jf],self.pxyd[jx,jy,jd,0],self.pxyd[jx,jy,jd,1],self.pxyd[jx,jy,jd,2],
+                                    self.imp[jf,jx,jy,jd,2,0].real,self.imp[jf,jx,jy,jd,2,0].imag,
+                                    self.imp[jf,jx,jy,jd,2,1].real,self.imp[jf,jx,jy,jd,2,1].imag))
+                        nw1.write('{:15.7g}{:10.1f}{:10.1f}{:10.1f}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'. \
+                                 format(self.freq[jf], self.pxyd[jx, jy, jd, 0], self.pxyd[jx, jy, jd, 1], self.pxyd[jx, jy, jd, 2],
+                                        self.imp[jf, jx, jy, jd, 2, 0].real, self.imp[jf, jx, jy, jd, 2, 0].imag,
+                                        self.imp[jf, jx, jy, jd, 2, 1].real, self.imp[jf, jx, jy, jd, 2, 1].imag))
 
         for ic in range(2):
             if ic == 0:
@@ -705,59 +783,68 @@ class pyMTSphere:
             nw.write(('{:>15s}{:>10s}{:>10s}'+
                       '{:>15s}{:>15s}{:>15s}{:>15s}'+
                       '{:>15s}{:>15s}{:>15s}{:>15s}{:>15s}{:>15s}\n'). \
-                    format('Frequency','X','Y','Ex(real)','Ex(imag)','Ey(real)','Ey(imag)', \
+                    format('Frequency','X','Y','Ex(real)','Ex(imag)','Ey(real)','Ey(imag)', 'Ez(real)', 'Ez(imag)', \
                     'Hx(real)','Hx(imag)','Hy(real)','Hy(imag)','Hz(real)','Hz(imag)'))
             nw2.write(('{:>15s}{:>10s}{:>10s}'+
                        '{:>15s}{:>15s}{:>15s}{:>15s}'+
                        '{:>15s}{:>15s}{:>15s}{:>15s}{:>15s}{:>15s}\n'). \
-                     format('Frequency', 'X', 'Y', 'Ex(real)', 'Ex(imag)', 'Ey(real)', 'Ey(imag)', \
+                     format('Frequency', 'X', 'Y', 'Ex(real)', 'Ex(imag)', 'Ey(real)', 'Ey(imag)', 'Ez(real)', 'Ez(imag)', \
                             'Hx(real)', 'Hx(imag)', 'Hy(real)', 'Hy(imag)', 'Hz(real)', 'Hz(imag)'))
             nw.write('\nSecondary\n')
             nw2.write('\nSecondary\n')
             for jf in range(self.nf):
-                for jx in range(self.nx):
-                    for jy in range(self.ny):
-                        nw.write(("{:15.7g}{:10.1f}{:10.1f}"+
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}"+
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
-                                 format(self.freq[jf], self.pxy[jx, jy, 0], self.pxy[jx, jy, 1],
-                                 self.Es[jf, jx, jy, 0, ic].real, self.Es[jf, jx, jy, 0, ic].imag,
-                                 self.Es[jf, jx, jy, 1, ic].real, self.Es[jf, jx, jy, 1, ic].imag,
-                                 self.Hs[jf, jx, jy, 0, ic].real, self.Hs[jf, jx, jy, 0, ic].imag,
-                                 self.Hs[jf, jx, jy, 1, ic].real, self.Hs[jf, jx, jy, 1, ic].real,
-                                 self.Hs[jf, jx, jy, 2, ic].real, self.Hs[jf, jx, jy, 2, ic].imag))
-                        nw2.write(("{:15.7g}{:10.1f}{:10.1f}"+
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}"+
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
-                                 format(self.freq[jf], self.pxy[jx, jy, 0], self.pxy[jx, jy, 1],
-                                        self.Es[jf, jx, jy, 0, ic].real, self.Es[jf, jx, jy, 0, ic].imag,
-                                        self.Es[jf, jx, jy, 1, ic].real, self.Es[jf, jx, jy, 1, ic].imag,
-                                        self.Hs[jf, jx, jy, 0, ic].real, self.Hs[jf, jx, jy, 0, ic].imag,
-                                        self.Hs[jf, jx, jy, 1, ic].real, self.Hs[jf, jx, jy, 1, ic].real,
-                                        self.Hs[jf, jx, jy, 2, ic].real, self.Hs[jf, jx, jy, 2, ic].imag))
+                for jd in range(self.nd):
+                    for jx in range(self.nx):
+                        for jy in range(self.ny):
+                            nw.write(("{:15.7g}{:10.1f}{:10.1f}{:10.1f}"+
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}"+
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
+                                     format(self.freq[jf], self.pxyd[jx, jy, jd, 0], self.pxyd[jx, jy, jd, 1],
+                                            self.pxyd[jx, jy, jd, 2],
+                                     self.Es[jf, jx, jy, jd, 0, ic].real, self.Es[jf, jx, jy, jd, 0, ic].imag,
+                                     self.Es[jf, jx, jy, jd, 1, ic].real, self.Es[jf, jx, jy, jd, 1, ic].imag,
+                                     self.Es[jf, jx, jy, jd, 2, ic].real, self.Es[jf, jx, jy, jd, 2, ic].imag,
+                                     self.Hs[jf, jx, jy, jd, 0, ic].real, self.Hs[jf, jx, jy, jd, 0, ic].imag,
+                                     self.Hs[jf, jx, jy, jd, 1, ic].real, self.Hs[jf, jx, jy, jd, 1, ic].real,
+                                     self.Hs[jf, jx, jy, jd, 2, ic].real, self.Hs[jf, jx, jy, jd, 2, ic].imag))
+                            nw2.write(("{:15.7g}{:10.1f}{:10.1f}{:10.1f}"+
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}"+
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
+                                     format(self.freq[jf], self.pxyd[jx, jy, jd, 0], self.pxyd[jx, jy, jd, 1],
+                                            self.pxyd[jx, jy, jd, 2],
+                                            self.Es[jf, jx, jy, jd, 0, ic].real, self.Es[jf, jx, jy, jd, 0, ic].imag,
+                                            self.Es[jf, jx, jy, jd, 1, ic].real, self.Es[jf, jx, jy, jd, 1, ic].imag,
+                                            self.Es[jf, jx, jy, jd, 2, ic].real, self.Es[jf, jx, jy, jd, 2, ic].imag,
+                                            self.Hs[jf, jx, jy, jd, 0, ic].real, self.Hs[jf, jx, jy, jd, 0, ic].imag,
+                                            self.Hs[jf, jx, jy, jd, 1, ic].real, self.Hs[jf, jx, jy, jd, 1, ic].real,
+                                            self.Hs[jf, jx, jy, jd, 2, ic].real, self.Hs[jf, jx, jy, jd, 2, ic].imag))
             nw.write('\nTotal\n')
             nw2.write('\nTotal\n')
             for jf in range(self.nf):
-                for jx in range(self.nx):
-                    for jy in range(self.ny):
-                        nw.write(("{:15.7g}{:10.1f}{:10.1f}" +
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}" +
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
-                                 format(self.freq[jf], self.pxy[jx, jy, 0], self.pxy[jx, jy, 1],
-                                        self.Et[jf, jx, jy, 0, ic].real, self.Et[jf, jx, jy, 0, ic].imag,
-                                        self.Et[jf, jx, jy, 1, ic].real, self.Et[jf, jx, jy, 1, ic].imag,
-                                        self.Ht[jf, jx, jy, 0, ic].real, self.Ht[jf, jx, jy, 0, ic].imag,
-                                        self.Ht[jf, jx, jy, 1, ic].real, self.Ht[jf, jx, jy, 1, ic].imag,
-                                        self.Ht[jf, jx, jy, 2, ic].real, self.Ht[jf, jx, jy, 2, ic].imag))
-                        nw2.write(("{:15.7g}{:10.1f}{:10.1f}" +
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}" +
-                                  "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
-                                 format(self.freq[jf], self.pxy[jx, jy, 0], self.pxy[jx, jy, 1],
-                                        self.Et[jf, jx, jy, 0, ic].real, self.Et[jf, jx, jy, 0, ic].imag,
-                                        self.Et[jf, jx, jy, 1, ic].real, self.Et[jf, jx, jy, 1, ic].imag,
-                                        self.Ht[jf, jx, jy, 0, ic].real, self.Ht[jf, jx, jy, 0, ic].imag,
-                                        self.Ht[jf, jx, jy, 1, ic].real, self.Ht[jf, jx, jy, 1, ic].imag,
-                                        self.Ht[jf, jx, jy, 2, ic].real, self.Ht[jf, jx, jy, 2, ic].imag))
+                for jd in range(self.nd):
+                    for jx in range(self.nx):
+                        for jy in range(self.ny):
+                            nw.write(("{:15.7g}{:10.1f}{:10.1f}{:10.1f}" +
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}" +
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
+                                     format(self.freq[jf], self.pxyd[jx, jy, jd, 0], self.pxyd[jx, jy, jd, 1], self.pxyd[jx, jy, jd, 2],
+                                            self.Et[jf, jx, jy, jd, 0, ic].real, self.Et[jf, jx, jy, jd, 0, ic].imag,
+                                            self.Et[jf, jx, jy, jd, 1, ic].real, self.Et[jf, jx, jy, jd, 1, ic].imag,
+                                            self.Et[jf, jx, jy, jd, 2, ic].real, self.Et[jf, jx, jy, jd, 2, ic].imag,
+                                            self.Ht[jf, jx, jy, jd, 0, ic].real, self.Ht[jf, jx, jy, jd, 0, ic].imag,
+                                            self.Ht[jf, jx, jy, jd, 1, ic].real, self.Ht[jf, jx, jy, jd, 1, ic].imag,
+                                            self.Ht[jf, jx, jy, jd, 2, ic].real, self.Ht[jf, jx, jy, jd, 2, ic].imag))
+                            nw2.write(("{:15.7g}{:10.1f}{:10.1f}{:10.1f}" +
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}" +
+                                      "{:15.7g}{:15.7g}{:15.7g}{:15.7}{:15.7g}{:15.7}{:15.7g}{:15.7}\n"). \
+                                     format(self.freq[jf], self.pxyd[jx, jy, jd, 0], self.pxyd[jx, jy, jd, 1],
+                                            self.pxyd[jx, jy, jd, 2],
+                                            self.Et[jf, jx, jy, jd, 0, ic].real, self.Et[jf, jx, jy, jd, 0, ic].imag,
+                                            self.Et[jf, jx, jy, jd, 1, ic].real, self.Et[jf, jx, jy, jd, 1, ic].imag,
+                                            self.Et[jf, jx, jy, jd, 2, ic].real, self.Et[jf, jx, jy, jd, 2, ic].imag,
+                                            self.Ht[jf, jx, jy, jd, 0, ic].real, self.Ht[jf, jx, jy, jd, 0, ic].imag,
+                                            self.Ht[jf, jx, jy, jd, 1, ic].real, self.Ht[jf, jx, jy, jd, 1, ic].imag,
+                                            self.Ht[jf, jx, jy, jd, 2, ic].real, self.Ht[jf, jx, jy, jd, 2, ic].imag))
         nw.close()
         nw1.close()
         nw2.close()
@@ -784,10 +871,19 @@ class pyMTSphere:
 
     def runmodel(self):
         self.openoutputfiles()
-        Zhat, E = PlaneWaveImpedance(self.outfile, self.nlyr, self.thk, self.res, self.nf, self.freq)
-        self.imp, self.Es, self.Hs, self.Et, self.Ht = mtsphere3d(self.outfile, self.nf, self.nlyr, self.nterms, self.nx, self.ny, self.freq, self.pxy, self.thk, self.res, self.depth, \
-                   self.radius, self.sphres, Zhat, E, self.htarg)
-        self.appres, self.phase = apparentresistivity( self.nf, self.nx, self.ny, self.freq, self.imp)
+        k, Z, E = PlaneWaveImpedance(self.outfile, self.nlyr, self.thk, self.res, self.nf, self.freq)
+        dpthl = np.zeros(self.nlyr + 1)
+        for jz in range(1, self.nlyr):
+            dpthl[jz + 1] = dpthl[jz] + self.thk[jz]
+        self.imp, self.Es, self.Hs = \
+            mtsphere3d(self.outfile, self.nf, self.nlyr, self.nterms, \
+                   self.nx,  self.ny, self.nd, self.freq, self.pxyd, self.thk, self.res, self.depth, \
+                   self.radius, self.sphres, E, dpthl, self.htarg)
+        self.imp, self.Et, self.Ht = \
+            getimpedance(self.nf, self.nx, self.ny, self.nd,
+                         self.nlyr, self.nterms, self.pxyd, dpthl, k, Z, self.depth,
+                         self.radius, E, self.Es, self.Hs )
+        self.appres, self.phase = apparentresistivity( self.nf, self.nx, self.ny, self.nd, self.freq, self.imp)
         self.writeresults()
         self.outfile.close()
 
@@ -796,7 +892,6 @@ class pyMTSphere:
 
     def quit(self):
         self.root.destroy()
-        sys.exit()
 
 if __name__ == '__main__':
     pymtsphere = pyMTSphere()
