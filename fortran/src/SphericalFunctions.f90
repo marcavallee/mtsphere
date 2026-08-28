@@ -143,9 +143,9 @@ SUBROUTINE SphericalFactorInitialisation(A,B,C,NTERMS)
         END DO
     END IF
 
-    END SUBROUTINE CylindricalDerivatives
+END SUBROUTINE CylindricalDerivatives
    
-SUBROUTINE REFLECTIONCOEFFICIENTS(NTERMS,RADIUS,YHAT,ZHAT,YHATS,ZHATS,RTM,RTE)
+SUBROUTINE REFLECTIONCOEFFICIENTS(NTERMS,RADIUS,YHAT,ZHAT,YHATS,ZHATS,RTM,RTE,TTM,TTE)
 
 ! Computation of the reflection coefficient of a conductive sphere
 
@@ -168,7 +168,7 @@ SUBROUTINE REFLECTIONCOEFFICIENTS(NTERMS,RADIUS,YHAT,ZHAT,YHATS,ZHATS,RTM,RTE)
     COMPLEX(KIND=QL), PARAMETER :: CI=(0._ql,1._ql)
     INTEGER NTERMS,NM,N
     REAL(KIND=QL) RADIUS
-    COMPLEX(KIND=QL) YHAT,ZHAT,YHATS,ZHATS,K,KS,RTM(NTERMS),RTE(NTERMS),DRJ,DRH,DRJS
+    COMPLEX(KIND=QL) YHAT,ZHAT,YHATS,ZHATS,K,KS,RTM(NTERMS),RTE(NTERMS),TTM(NTERMS),TTE(NTERMS),DRJ,DRH,DRJS
     DOUBLE COMPLEX KA,KSA,JKA(0:NTERMS), DJKA(0:NTERMS), JKSA(0:NTERMS), DJKSA(0:NTERMS), &
                    YKA(0:NTERMS), DYKA(0:NTERMS), YKSA(0:NTERMS), DYKSA(0:NTERMS), & 
                    hkA(0:NTERMS), DHKa(0:NTERMS), hkSA(0:NTERMS), DHKSA(0:NTERMS),A,B,C,D
@@ -193,6 +193,8 @@ SUBROUTINE REFLECTIONCOEFFICIENTS(NTERMS,RADIUS,YHAT,ZHAT,YHATS,ZHATS,RTM,RTE)
         if(inductive_limit) then
             RTM(n) = - ( jka(n) + ka * djka(n) ) / ( hka(n) + ka * dhka(n) )
             RTE(n) = - jka(n) / hka(n)
+            TTM(n) = (0.,0.)
+            TTE(n) = (0.,0.)
         else
             A = yhat  * jka(n)  * ( jksa(n) + ksa * djksa(n) )
             B = yhats * jksa(n) * ( jka(n)  + ka  * djka(n) )
@@ -205,7 +207,20 @@ SUBROUTINE REFLECTIONCOEFFICIENTS(NTERMS,RADIUS,YHAT,ZHAT,YHATS,ZHATS,RTM,RTE)
             C = zhat  * hka(n)  * ( jksa(n) + ksa * djksa(n) )
             D = zhats * jksa(n) * ( hka(n)  + ka  * dhka(n) )
             RTE(n) = - ( A - B ) / ( C - D )
-       end if
+            
+            A = yhats * jka(n)  * ( hka(n)  + ka  * dhka(n)  )
+            B = yhats * hka(n)  * ( jka(n)  + ka  * djka(n)  )
+            C = yhats * jksa(n) * ( hka(n)  + ka  * dhka(n)  )
+            D = yhat  * hka(n)  * ( jksa(n) + ksa * djksa(n) )
+            TTM(n) = ( A - B ) / ( C - D )
+            
+            A = zhats * jka(n)  * ( hka(n)  + ka  * dhka(n)  )
+            B = zhats * hka(n)  * ( jka(n)  + ka  * djka(n)  )
+            C = zhats * jksa(n) * ( hka(n)  + ka  * dhka(n)  )
+            D = zhat  * hka(n)  * ( jksa(n) + ksa * djksa(n) )
+            TTE(n) = ( A - B ) / ( C - D )
+            
+        end if
         
     END DO
    
@@ -297,14 +312,15 @@ subroutine CylindricalDerivativeMatrixInitialisation(NTERMS,LMBDA,DXPIY,DXMIY,DX
             DXMIY(MP,M) =   1._QL ! Zero si M == -N, M = N, MP = M - 1, NP = N - 1
         END IF
     END DO
-    DXPIY = DXPIY * LMBDA 
-    DXMIY = DXMIY * LMBDA
     DO M = -NTERMS-1, NTERMS+1
         DO MP = -NTERMS, NTERMS
             DX(M,MP) =        0.5_QL * ( DXPIY(M,MP) + DXMIY(M,MP) )
             DY(M,MP) = - CI * 0.5_QL * ( DXPIY(M,MP) - DXMIY(M,MP) )
         END DO
-    END DO
+    END DO    
+    DX = DX * LMBDA 
+    DY = DY * LMBDA
+
 
     end subroutine CylindricalDerivativeMatrixInitialisation
     
@@ -552,6 +568,139 @@ SUBROUTINE VerticalFieldSphericalCoefficients(NTERMS,PSIA,PSIF,YHAT,ZHAT,EZNM,HZ
 
 end subroutine VerticalFieldSphericalCoefficients   
     
+SUBROUTINE MTFieldSphericalCoefficients(NTERMS,PSIA,PSIF,YHAT,ZHAT,ENM,HNM)
+
+! Computation of the spherical field coefficients from the potential spherical coefficients
+
+!          Input
+!          -----
+! NTERMS: number of degrees
+! PHIA: transverse magnetic spherical potential
+! PSIF: transverse electric spherical potential
+! YHAT: admittivity
+! ZHAT: impedivity
+
+!          Output
+!          -----
+! ENM: electric field spherical coefficients
+! HNM: magnetic field spherical coefficients
+
+    IMPLICIT NONE
+    INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
+    COMPLEX(KIND=QL), PARAMETER :: CI = CMPLX (0.D0, 1.D0, KIND=QL)
+    INTEGER NTERMS, I, N, M
+    COMPLEX(KIND=QL) ENM(3,0:NTERMS+1,-2:2),HNM(3,0:NTERMS+1,-2:2), &
+                     PSIA(NTERMS,-1:1), PSIF(NTERMS,-1:1),K,yhat,zhat
+    REAL(KIND=QL) A(0:NTERMS+1,-NTERMS-1:NTERMS+1), B(0:NTERMS+1,-NTERMS-1:NTERMS+1), &
+                  C(0:NTERMS+1,-NTERMS-1:NTERMS+1)
+
+    CALL SphericalFactorInitialisation(A,B,C,NTERMS+1)
+    K = sqrt ( - yhat * zhat )
+    CALL ComputeField(PSIF,PSIA,ENM,YHAT,-1)
+    CALL ComputeField(PSIA,PSIF,HNM,ZHAT,1)  
+        
+    CONTAINS
     
+    SUBROUTINE ComputeField(PHI,PSI,FNM,PHAT,SIGNE)
     
+    INTEGER SIGNE,MM
+    COMPLEX(KIND=QL) PHAT, PHI(NTERMS,-1:1), PSI(NTERMS,-1:1), &
+        FNM(3,0:NTERMS+1,-2:2), TXPIY, TXMIY, TZ
+    
+        FNM = (0._QL,0._QL)
+        DO N = 0, NTERMS + 1
+            if ( n < 3 ) then
+                MM = n
+            else
+                MM = 2
+            end IF
+            DO M = - MM, MM
+                TXPIY = (0._QL,0._QL)
+                TXMIY = (0._QL,0._QL)
+                TZ    = (0._QL,0._QL) 
+                IF ( N > 0 .AND. N .LE. NTERMS .AND. M > - 1 ) THEN
+                    TXPIY = TXPIY + CI * C(N,M-1)               * PHI(N,M-1) * SIGNE
+                END IF
+                IF ( N > 0 .AND. N .LE. NTERMS .AND. M <  1 ) THEN
+                    TXMIY = TXMIY + CI * C(N,M)                 * PHI(N,M+1) * SIGNE
+                END IF
+                IF ( N > 0 .AND. N .LE. NTERMS .AND. ABS(M) < 2 ) THEN
+                    TZ    = TZ    - CI * M                      * PHI(N,M)   * SIGNE
+                ENDIF
+                IF ( N < NTERMS .AND. M > -1 ) THEN
+                    TXPIY = TXPIY - K * ( N + 2 ) * B(N+1,M-1)  * PSI(N+1,M-1) / PHAT
+                END IF
+                IF ( N > 1 .AND. M > -1 ) THEN
+                    TXPIY = TXPIY - K * ( N - 1 ) * B(N,-M)     * PSI(N-1,M-1) / PHAT 
+                END IF
+                IF ( N < NTERMS .AND. M < 1 ) THEN
+                    TXMIY = TXMIY - K * ( N + 2 ) * B(N+1,-M-1) * PSI(N+1,M+1) / PHAT 
+                END IF  
+                IF ( N > 1 .AND. M < 1 ) THEN
+                    TXMIY = TXMIY - K * ( N - 1 ) * B(N,M)      * PSI(N-1,M+1) / PHAT
+                END IF
+                IF ( N < NTERMS .AND. ABS(M) < 2 ) THEN
+                    TZ    = TZ    + K * ( N + 2 ) * A(N,M)      * PSI(N+1,M)   / PHAT
+                END IF
+                IF ( N > 1 .AND. ABS(M) < 2 )THEN                      
+                    TZ    = TZ    + K * ( N - 1 ) * A(N-1,M)    * PSI(N-1,M)   / PHAT
+                END IF
+            
+                FNM(1,N,M) =        0.5_QL * ( TXPIY + TXMIY )
+                FNM(2,N,M) = - CI * 0.5_QL * ( TXPIY - TXMIY ) 
+                FNM(3,N,M) = TZ
+            END DO
+        END DO    
+    
+    END SUBROUTINE ComputeField 
+    
+END SUBROUTINE MTFieldSphericalCoefficients
+    
+SUBROUTINE MTFieldsFromSphericalCoefficients(Enm,Hnm,NTERMS,K,R,THETA,PHI,SINGULIER,E,H)
+    
+    USE sphericalfunctions 
+
+    IMPLICIT NONE
+    INTEGER NTERMS,N,M,I,NM,MM
+    LOGICAL SINGULIER
+    REAL(KIND=QL) R,THETA,PHI
+    COMPLEX(KIND=QL) ENM(3,0:NTERMS+1,-2:2),HNM(3,0:NTERMS+1,-2:2),K,SR,YNMLOCAL,E(3),H(3)
+    DOUBLE COMPLEX KR,JKR(0:NTERMS+1),DJKR(0:NTERMS+1),YKR(0:NTERMS+1),DYKR(0:NTERMS+1),HKR(0:NTERMS+1),DHKR(0:NTERMS+1)
+    
+    E = (0._QL,0._QL)
+    H = (0._QL,0._QL)
+    
+    IF (R <= 0.0015_QL ) THEN
+        YNMLOCAL = YNM(0, 0, THETA, PHI)
+        DO I = 1, 3
+            E(I) = ENM(I, 0, 0) * (1.0_QL, 0.0_QL) * YNMLOCAL
+            H(I) = HNM(I, 0, 0) * (1.0_QL, 0.0_QL) * YNMLOCAL
+        END DO
+        RETURN 
+    END IF
+
+    KR = K * R
+    CALL CSPHJY(NTERMS+1,KR,NM,JKR,DJKR,YKR,DYKR,HKR,DHKR)
+    DO N = 0, NTERMS+1
+        IF (SINGULIER) THEN
+            SR = HKR(N)
+        ELSE
+            SR = JKR(N)
+        END IF
+        if ( N < 3 ) THEN
+            MM = N
+        else
+            MM = 2
+        end IF
+        DO M = -MM,MM
+            YNMLOCAL = YNM(N,M,THETA,PHI)
+            DO I = 1, 3
+                E(I) = E(I) + ENM(I,N,M) * SR * YNMLOCAL
+                H(I) = H(I) + HNM(I,N,M) * SR * YNMLOCAL
+            END DO
+        END DO
+    END DO
+    
+END Subroutine MTFieldsFromSphericalCoefficients
+
     

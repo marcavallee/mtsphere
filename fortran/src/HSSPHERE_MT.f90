@@ -1,5 +1,5 @@
     
-SUBROUTINE MTSphere_MultipleSources(NW,NTERMS,NLAT,NLON,ZS,ZR,NLYR,THKD,RADIUS,YHAT,ZHAT,RTM,RTE,E,H)
+SUBROUTINE MTSphere_MultipleSources(NW,NTERMS,NLAT,NLON,ZS,ZR,NLYR,THKD,DPTHL,RADIUS,YHAT,ZHAT,RTM,RTE,E,H)
 !  Computes the vertical electric and magnetic field spherical coefficients
 !  above and below the receiver layer. The source is represented by its potential
 !  spherical coefficients. This version is for a plane wave source, with M = -1,1.
@@ -26,7 +26,7 @@ use precision
 
  IMPLICIT NONE
 
- INTEGER NTERMS,NLAT,NLON,NLYR,JZ,SLYR,RLYR,IC,N,M,MP,INT,JLAT,JLON,NW
+ INTEGER NTERMS,NLAT,NLON,NLYR,JZ,SXLYR,RXLYR,IC,N,M,MP,INT,JLAT,JLON,NW
  REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,ZR,RADIUS,ZLAT,LMBDA,THETA, &
                 RHO, PHI, XGAUSS(NLAT), WGAUSS(NLAT)
  
@@ -34,22 +34,18 @@ use precision
                    E(2,NTERMS,-1:1,NLAT,NLON,3), H(2,NTERMS,-1:1,NLAT,NLON,3), &
                    ET(2,nterms,-1:1,-2:2,3), HT(2,nterms,-1:1,-2:2,3), EI, HI
   
-    SLYR = 0              
-    RLYR = 0
-    DPTHL = 0._QL
+    SXLYR = 0              
+    RXLYR = 0
     IF ( NLYR > 0 ) THEN
-        DO JZ = 1, NLYR-1
-        DPTHL(JZ+1) = DPTHL(JZ) + THKD(JZ)
-        END DO
         DO JZ = NLYR,1,-1
         IF (ZS > DPTHL(JZ)) THEN
-            SLYR = JZ
+            SXLYR = JZ
             EXIT
         END IF
         END DO
         DO JZ = NLYR,1,-1
         IF (ZR > DPTHL(JZ)) THEN
-            RLYR = JZ
+            RXLYR = JZ
             EXIT
         END IF
         END DO
@@ -60,8 +56,8 @@ use precision
         theta = ACOS(XGAUSS(JLAT))
         ZLAT = RADIUS * COS(THETA) + ZR
         RHO = RADIUS * SIN(THETA)
-        if ( RHO < 0.01_QL ) RHO = 0.01_QL
-        call MTSPHERE_HNK_MultipleSources(NTERMS, SLYR, RLYR, NLYR, THKD, DPTHL, YHAT, ZHAT, ZS, ZLAT, RHO, RTM, RTE, ET, HT)
+        if ( RHO < 0.001_QL ) RHO = 0.001_QL
+        call MTSPHERE_HNK_MultipleSources(NTERMS, SXLYR, RXLYR, NLYR, THKD, DPTHL, YHAT, ZHAT, ZS, ZLAT, RHO, RTM, RTE, ET, HT)
         do IC = 1, 2
             do n = 1, NTERMS
                 do M = -1, 1, 2
@@ -86,13 +82,13 @@ use precision
     
 end subroutine MTSphere_MultipleSources
 
-subroutine MTSPHERE_HNK_MultipleSources(NTERMS, SLYR, RLYR, NLYR, THKD, DPTHL, YHAT, ZHAT, ZS, ZR, RHO, RTM, RTE, ET, HT)
+subroutine MTSPHERE_HNK_MultipleSources(NTERMS, SXLYR, RXLYR, NLYR, THKD, DPTHL, YHAT, ZHAT, ZS, ZR, RHO, RTM, RTE, ET, HT)
 
 use FILT_COEF_Q
 
 implicit NONE
 
- INTEGER NTERMS,NLYR,I,SLYR,RLYR
+ INTEGER NTERMS,NLYR,I,SXLYR,RXLYR
  REAL(KIND=QL) DEL_JN,Y,RHO_JN,LMBDA,RHO,THKD(NLYR-1),DPTHL(NLYR),ZS,ZR
  COMPLEX(KIND=QL) ET(2,NTERMS,-1:1,-2:2,3), HT(2,NTERMS,-1:1,-2:2,3), &
     RTM(NTERMS),RTE(NTERMS),YHAT(0:NLYR),ZHAT(0:NLYR), &
@@ -109,7 +105,7 @@ implicit NONE
    Y = RHO_JN + DBLE(I) * DEL_JN
    LMBDA = EXP (Y)
    IF ( NLYR > 0 ) THEN
-        CALL HSSPHERE_KER (LMBDA,SLYR,NLYR,THKD,DPTHL,ZS,YHAT,ZHAT,AN,FN)
+        CALL HSSPHERE_KER (LMBDA,SXLYR,NLYR,THKD,DPTHL,ZS,YHAT,ZHAT,AN,FN)
    END IF
    CALL MTSPHERE_JMP_MultipleSource
    IF (JUMP .AND. I > -40) EXIT
@@ -120,7 +116,7 @@ implicit NONE
    Y = RHO_JN + DBLE(I) * DEL_JN
    LMBDA = EXP (Y)
    IF ( NLYR > 0 ) THEN
-        CALL HSSPHERE_KER (LMBDA,SLYR,NLYR,THKD,DPTHL,ZS,YHAT,ZHAT,AN,FN)
+        CALL HSSPHERE_KER (LMBDA,SXLYR,NLYR,THKD,DPTHL,ZS,YHAT,ZHAT,AN,FN)
    END IF
    CALL MTSPHERE_JMP_MultipleSource
    IF (JUMP .AND. I < -60) EXIT
@@ -149,8 +145,8 @@ contains
      ALLOCATE ( AZ (2,2,NTERMS,-2:2), FZ (2,2,NTERMS,-2:2), &
                      EM(2,NTERMS,-1:1,-2:2,3), HM(2,NTERMS,-1:1,-2:2,3), &
                      EW(2,NTERMS,-1:1,-2:2,3), HW(2,NTERMS,-1:1,-2:2,3) )
-     CALL MTMultipleSourceCoefficients(NTERMS,LMBDA,YHAT(SLYR),ZHAT(SLYR),RTM,RTE,AZ,FZ)
-     CALL MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SLYR,RLYR,LMBDA,ZR,yhat(RLYR),zhat(RLYR), &
+     CALL MTMultipleSourceCoefficients(NTERMS,LMBDA,YHAT(SXLYR),ZHAT(SXLYR),RTM,RTE,AZ,FZ)
+     CALL MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SXLYR,RXLYR,LMBDA,ZR,yhat(RXLYR),zhat(RXLYR), &
          AZ,FZ,AN,FN,EM,HM)
       
     ! Calcul des champs
@@ -160,11 +156,12 @@ contains
      
     wj = 0._QL
     wj(0) = WJ0(I)
-    if ( RHO .GT. 0.01_QL ) THEN
+    if ( RHO .GT. 0.0015_QL ) THEN
         WJ(1) = WJ1(I)
         WJ(2) = 2._QL * WJ(1) / ( RHO * LMBDA ) - WJ(0)
     end if
     do M = -2, 2
+        if ( rho <= 0.0015_QL .AND. M /= 0) CYCLE
         EW(:,:,:,M,:) = EW(:,:,:,M,:) + EM(:,:,:,M,:) * WJ(ABS(M)) * LMBDA
         HW(:,:,:,M,:) = HW(:,:,:,M,:) + HM(:,:,:,M,:) * WJ(ABS(M)) * LMBDA
     end DO
@@ -251,7 +248,7 @@ SUBROUTINE MTMultipleSourceCoefficients(NTERMS,LMBDA,YHAT,ZHAT,RTM,RTE,AZ,FZ)
     
 END SUBROUTINE MTMultipleSourceCoefficients
 
-SUBROUTINE MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SLYR,RLYR,LMBDA,ZR,YHAT,ZHAT,AZ,FZ,AN,FN,EM,HM)
+SUBROUTINE MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SXLYR,RXLYR,LMBDA,ZR,YHAT,ZHAT,AZ,FZ,AN,FN,EM,HM)
 
 ! Computation of the spherical coefficients for cylindrical fields
 
@@ -281,7 +278,7 @@ SUBROUTINE MTMultipleSourceFields(NTERMS,NLYR,DPTHL,SLYR,RLYR,LMBDA,ZR,YHAT,ZHAT
 use precision
 
     IMPLICIT NONE
-    INTEGER NTERMS,NLYR,SLYR,RLYR,ID,IC,N,M,IL,ISR
+    INTEGER NTERMS,NLYR,SXLYR,RXLYR,ID,IC,N,M,IL,ISR
     REAL(KIND=QL)    LMBDA, lmbdasq, DPTHL(NLYR), ZR
     COMPLEX(KIND=QL) EM(2,NTERMS,-1:1,-2:2,3), DZ,  &
                      HM(2,NTERMS,-1:1,-2:2,3), &
@@ -295,14 +292,14 @@ use precision
     EM = ZERO
     HM = ZERO
     DO ID = 1, 2
-        if ( RLYR == 0 .AND. ID == 1 ) CYCLE
-        if ( RLYR == NLYR .AND. ID == 2 ) CYCLE
+        if ( RXLYR == 0 .AND. ID == 1 ) CYCLE
+        if ( RXLYR == NLYR .AND. ID == 2 ) CYCLE
         if ( ID == 1 ) THEN
-            DECAY = EXP ( - U * ( ZR - DPTHL(RLYR) ) )
-        ELSE if ( RLYR == 0 ) then
+            DECAY = EXP ( - U * ( ZR - DPTHL(RXLYR) ) )
+        ELSE if ( RXLYR == 0 ) then
                 DECAY = EXP ( U * ( ZR - DPTHL(1) ) )
         else
-                DECAY = EXP ( U * ( ZR - DPTHL(RLYR) ) )
+                DECAY = EXP ( U * ( ZR - DPTHL(RXLYR) ) )
         end if
         if ( ID == 1 ) then
             DZ = - U
@@ -310,8 +307,8 @@ use precision
             DZ = U
         end IF
         do isr = 1, 2
-            RTM = AN(ID,ISR,RLYR) * DECAY
-            RTE = FN(ID,ISR,RLYR) * DECAY
+            RTM = AN(ID,ISR,RXLYR) * DECAY
+            RTE = FN(ID,ISR,RXLYR) * DECAY
             do IC = 1, 2
                 do n = 1, NTERMS
                     do M = -1, 1, 2
@@ -341,7 +338,8 @@ use precision
 
 END SUBROUTINE MTMultipleSourceFields      
       
-SUBROUTINE MTSPHERE_SingleSource(NTERMS,PSIA,PSIF,ZS,NX,NY,PS,NLYR,THKD,YHAT,ZHAT,E,H)
+SUBROUTINE MTSPHERE_SingleSource(NTERMS,PSIA,PSIF,PSIAT,PSIFT,NX,NY,ND,PS,NLYR,THKD,YHAT,ZHAT, &
+                                 YHATS,ZHATS,DPTHL,ZS,RADIUS,E,H)
     
 !  Compute the electric and magnetic fields associated to a spherical source embedded in a 
 !  plane wave field (maximum absolute order number is one).
@@ -378,54 +376,86 @@ USE FILT_COEF_Q
  IMPLICIT NONE
 
  REAL, PARAMETER :: TWOPI = 2._QL * PI
- INTEGER NTERMS,NLYR,JZ,IX,IY,IXY,NX,NY,NXY,SXLYR,RXLYR,OPTION,I,M,IC
- REAL W
- REAL(KIND=QL) DEL_JN,THKD(NLYR-1),DPTHL(NLYR),ZS,ZR,EPR,EPI,HPR,HPI,RHO,PHI
- REAL(KIND=QL) PS(NX,NY,3)   
- COMPLEX(KIND=QL) E(NX,NY,3), H(NX,NY,3), &
+ INTEGER NTERMS,NLYR,JZ,JX,JY,JD,NX,NY,ND,NXY,SXLYR,RXLYR,OPTION,I,M,IC
+ REAL RADIUS
+ REAL(KIND=QL) DEL_JN,THKD(NLYR-1),DPTHL(NLYR),ZS,ZR,EPR,EPI,HPR,HPI,RHO,PHI,R
+ REAL(KIND=QL) PS(NX,NY,ND,3),DD,THETA
+ COMPLEX(KIND=QL) E(NX,NY,ND,3), H(NX,NY,ND,3), K, YHATS, ZHATS, &
                   YHAT(0:NLYR), zhat(0:NLYR), EMPHI, &
-                  PSIA(NTERMS,-1:1), PSIF(NTERMS,-1:1), EH(-2:2,3), HH(-2:2,3)
+                  PSIA(NTERMS,-1:1), PSIF(NTERMS,-1:1), &
+                  PSIAT(NTERMS,-1:1), PSIFT(NTERMS,-1,1), EH(-2:2,3), HH(-2:2,3), &
+                  ENM(3,0:NTERMS+1,-2:2), HNM(3,0:NTERMS+1,-2:2)
+LOGICAL SINGULAR
                   
  E = ZERO
  H = ZERO
  DEL_JN = LOG (10.D0) / DBLE (NDEC_JN)
  
-SXLYR = 0                ! Identify layer containing loop or GW source
-ZR = 0
-DPTHL = 0._QL
-RXLYR = 0
+SXLYR = 0   ! Layer identification of sphere
 IF ( NLYR > 0 ) THEN
-    DO JZ = 1, NLYR-1
-    DPTHL(JZ+1) = DPTHL(JZ) + THKD(JZ)
-    END DO
     DO JZ = NLYR,1,-1
-    IF (ZS > DPTHL(JZ)) THEN
-        SXLYR = JZ
-        EXIT
-    END IF
+        IF (ZS > DPTHL(JZ)) THEN
+            SXLYR = JZ
+            EXIT
+        END IF
     END DO
 END IF
-     
-    DO IX = 1, NX
-        do IY = 1, NY
-            RHO = SQRT (PS(IX,IY,1)**2 + PS(IX,IY,2)**2)
-            IF ( RHO < 0.01_QL  ) THEN 
-                RHO = 0.01_QL
-                PHI = 0._QL
+
+do JD = 1, ND
+    ZR = PS(1,1,JD,3)
+    RXLYR = 0
+    do JZ = NLYR, 1, -1
+        if ( ZR > DPTHL(JZ) ) then
+            RXLYR = JZ
+            exit
+        end if
+    end DO
+    DO JX = 1, NX
+        do JY = 1, NY
+            if ( ABS ( ZR - ZS ) < RADIUS ) THEN
+                DD = PS(JX,JY,JD,3) - ZS
+                R = SQRT ( PS(JX,JY,JD,1) ** 2 + PS(JX,JY,JD,2) ** 2 + DD ** 2 )
+                IF ( R < 0.001_QL ) THEN
+                    R = 0.001_QL
+                    PHI = 0._QL
+                ELSE    
+                    PHI = ATAN2 ( PS(JX,JY,JD,2), PS(JX,JY,JD,1) )
+                END IF
+                THETA = acos ( DD / r )   
+                if ( R <= RADIUS )  then
+                    SINGULAR = .FALSE.
+                    CALL MTFieldSphericalCoefficients(NTERMS,PSIAT,PSIFT,YHATS,ZHATS,ENM,HNM)
+                    K = SQRT(-YHATS*ZHATS)
+                    CALL MTFieldsFromSphericalCoefficients(Enm,Hnm,NTERMS,K,R, &
+                        THETA,PHI,SINGULAR,E(JX,JY,JD,:),H(JX,JY,JD,:))    
+                else
+                    SINGULAR = .TRUE.
+                    CALL MTFieldSphericalCoefficients(NTERMS,PSIA,PSIF,YHAT(RXLYR),ZHAT(RXLYR),ENM,HNM)
+                    K = SQRT(-YHAT(RXLYR)*ZHAT(RXLYR))
+                    CALL MTFieldsFromSphericalCoefficients(Enm,Hnm,NTERMS,K,R, &
+                        THETA,PHI,SINGULAR,E(JX,JY,JD,:),H(JX,JY,JD,:))    
+                end IF
             ELSE
-                PHI = ATAN2 ( PS(IX,IY,2), PS(IX,IY,1) )
-            END IF
-            CALL MTSPHERE_HNK_SingleSource(NTERMS,SXLYR,RXLYR,PSIA,PSIF, &
-                        NLYR,THKD,DPTHL,YHAT,ZHAT,ZS,ZR,RHO,EH,HH)
-            DO M = -2, 2
-                DO IC = 1, 3
-                    EMPHI = EXP ( CI * M * PHI )
-                    E(IX,IY,IC) = E(IX,IY,IC) + EH(M,IC) * EMPHI
-                    H(IX,IY,IC) = H(IX,IY,IC) + HH(M,IC) * EMPHI
-                END DO
-            end DO
+                RHO = SQRT (PS(JX,JY,JD,1)**2 + PS(JX,JY,JD,2)**2)
+                IF ( RHO < 0.001_QL  ) THEN 
+                    RHO = 0.001_QL
+                    PHI = 0._QL
+                ELSE
+                    PHI = ATAN2 ( PS(JX,JY,JD,2), PS(JX,JY,JD,1) )
+                END IF
+                CALL MTSPHERE_HNK_SingleSource(NTERMS,SXLYR,RXLYR,PSIA,PSIF, &
+                            NLYR,THKD,DPTHL,YHAT,ZHAT,ZS,ZR,RHO,EH,HH)
+                DO M = -2, 2
+                    DO IC = 1, 3
+                        EMPHI = EXP ( CI * M * PHI )
+                        E(JX,JY,JD,IC) = E(JX,JY,JD,IC) + EH(M,IC) * EMPHI
+                        H(JX,JY,JD,IC) = H(JX,JY,JD,IC) + HH(M,IC) * EMPHI
+                    END DO
+                end DO
+            end IF
         END DO
     END DO
+end DO
     
 END SUBROUTINE MTSPHERE_SingleSource
     
@@ -512,15 +542,18 @@ Hh = Hh / ( RHO * 4._QL * PI )
     ! Calcul des champs
 
     CALL MTSingleSourceCoefficients(NTERMS,PSIA,PSIF,LMBDA,YHAT(SXLYR),ZHAT(SXLYR),AZ,FZ)
-    CALL MTSingleSourceFields(NLYR,DPTHL,RXLYR,ZR,LMBDA,yhat(RXLYR),zhat(RXLYR), &
+    CALL MTSingleSourceFields(NLYR,DPTHL,SXLYR,RXLYR,ZS,ZR,LMBDA,yhat(rxlyr),zhat(rxlyr), &
          AZ,FZ,AN,FN,EM,HM)
     EW = (0._QL, 0._QL)
     HW = (0._QL, 0._QL)
     WJ = 0._QL
     WJ(0) = WJ0(I)
-    WJ(1) = WJ1(I)
-    WJ(2) = 2._QL * WJ(1) / ( RHO * LMBDA ) - WJ(0)
+    if (RHO > 0.0015_QL ) then
+        WJ(1) = WJ1(I)
+        WJ(2) = 2._QL * WJ(1) / ( RHO * LMBDA ) - WJ(0)
+    end if
     DO M = -2, 2
+        if ( RHO <= 0.0015_QL .AND. M /= 0) CYCLE
         DO ic = 1, 3
             EW(M,ic) = EW(M,IC) + EM(IC,M) * WJ(ABS(M))
             HW(M,ic) = HW(M,IC) + HM(IC,M) * WJ(ABS(M))
@@ -593,7 +626,7 @@ SUBROUTINE MTSingleSourceCoefficients(NTERMS,PSIA,PSIF,LMBDA,YHAT,ZHAT,AZ,FZ)
     
     END SUBROUTINE MTSingleSourceCoefficients
 
-SUBROUTINE MTSingleSourceFields(NLYR,DPTHL,RLYR,ZR,LMBDA,YHAT,ZHAT,AZ,FZ,AN,FN,EM,HM)
+SUBROUTINE MTSingleSourceFields(NLYR,DPTHL,SXLYR,RXLYR,ZS,ZR,LMBDA,YHAT,ZHAT,AZ,FZ,AN,FN,EM,HM)
 
 ! Computation of the spherical coefficients for cylindrical fields
 
@@ -612,6 +645,8 @@ SUBROUTINE MTSingleSourceFields(NLYR,DPTHL,RLYR,ZR,LMBDA,YHAT,ZHAT,AZ,FZ,AN,FN,E
 !   FZ - Transverse electric vertical potential
 !   AN      - TM layered earth propagation
 !   FN      - TE layered earth propagation
+!   ID - Propagation direction
+!   ISR - Source direction
 
 !           Output
 !           ------
@@ -623,57 +658,82 @@ SUBROUTINE MTSingleSourceFields(NLYR,DPTHL,RLYR,ZR,LMBDA,YHAT,ZHAT,AZ,FZ,AN,FN,E
     use PRECISION
 
     IMPLICIT NONE
-    INTEGER NLYR,RLYR,ID,IC,N,M,ISR
-    REAL(KIND=QL)    Il, LMBDA, lmbdasq, DPTHL(NLYR), ZR
+    INTEGER NLYR,SXLYR,RXLYR,ID,IC,N,M,ISR
+    REAL(KIND=QL)    Il, LMBDA, lmbdasq, DPTHL(NLYR), ZS, ZR, DZRS
     COMPLEX(KIND=QL) EM(3,-2:2), HM(3,-2:2), &
                      AZ(2,-2:2), FZ(2,-2:2), &
-                     yhat, ZHAT, U, DZ(2), DECAY, RTM, RTE, &
+                     yhat, ZHAT, US, UR, DZ(2), DZS, DECAY, RTM, RTE, &
                      AN(2,2,0:NLYR), FN(2,2,0:NLYR), &
                      AZISR(-1:1), FZISR(-1:1), &
                      AZDX(-2:2), AZDY(-2:2), FZDX(-2:2), FZDY(-2:2)
         
     LMBDASQ = LMBDA ** 2
-    U = SQRT ( LMBDASQ + YHAT * ZHAT ) 
-    DZ(1) = - U
-    DZ(2) =   U
-    EM = (0._QL,0._QL)
-    HM = (0._QL,0._QL)
-    DO ID = 1, 2
-        if ( ( ID == 1 .AND. RLYR == 0 ) .OR. ( ID == 2 .AND. RLYR == NLYR ) ) cycle
-        if ( ID == 1 ) THEN
-            DECAY = EXP ( - U * ( ZR - DPTHL(RLYR) ) )
-        ELSE IF ( RLYR == 0 ) THEN
-            DECAY = EXP (   U * ( ZR - DPTHL(1) ) )
-        ELSE
-            DECAY = EXP (   U * ( ZR - DPTHL(RLYR) ) )
-        end IF
-        do isr = 1, 2
-            RTM = AN(ID,ISR,RLYR) * DECAY
-            RTE = FN(ID,ISR,RLYR) * DECAY
-!            write(20,*)U,ISR,RTM,RTE
-!            write(20,*)ID,FN(ID,ISR,RLYR)
-            AZISR = ZERO
-            FZISR = ZERO
-            do M = -1, 1, 2
-                AZISR(M) = AZ(ISR,M)
-                FZISR(M) = FZ(ISR,M)
-            end do
-            call CylindricalDerivatives(1,1,LMBDA,AZISR,AZDX)
-            call CylindricalDerivatives(1,2,LMBDA,AZISR,AZDY)
-            call CylindricalDerivatives(1,1,LMBDA,FZISR,FZDX)
-            call CylindricalDerivatives(1,2,LMBDA,FZISR,FZDY)
-            EM(1,:) = EM(1,:) + RTM * AZDX     * DZ(ID)  / yhat
-            EM(2,:) = EM(2,:) + RTM * AZDY     * DZ(ID)  / yhat
+    UR = SQRT ( LMBDASQ + YHAT * ZHAT )
+    DZ(1) = - UR
+    DZ(2) =   UR
+    EM = ZERO
+    HM = ZERO
+    do isr = 1, 2
+        AZISR = ZERO
+        FZISR = ZERO
+        do M = -1, 1, 2
+            AZISR(M) = AZ(ISR,M)
+            FZISR(M) = FZ(ISR,M)
+        end do
+        call CylindricalDerivatives(1,1,LMBDA,AZISR,AZDX)
+        call CylindricalDerivatives(1,2,LMBDA,AZISR,AZDY)
+        call CylindricalDerivatives(1,1,LMBDA,FZISR,FZDX)
+        call CylindricalDerivatives(1,2,LMBDA,FZISR,FZDY)
+        DO ID = 1, 2
+            if ( ( ID == 1 .AND. RXLYR == 0 ) .OR. ( ID == 2 .AND. RXLYR == NLYR ) ) then
+                CYCLE
+            elseif  ( ID == 1 ) THEN
+                DECAY = EXP ( - UR * ( ZR - DPTHL(RXLYR) ) )
+            ELSE IF ( RXLYR == 0 ) THEN
+                DECAY = EXP (   UR * ZR  )
+            ELSE
+                DECAY = EXP (   UR * ( ZR - DPTHL(RXLYR) ) )
+            end IF
+            RTM = AN(ID,ISR,RXLYR) * DECAY
+            RTE = FN(ID,ISR,RXLYR) * DECAY
+            EM(1,:) = EM(1,:) + RTM * AZDX         * DZ(ID)  / yhat
+            EM(2,:) = EM(2,:) + RTM * AZDY         * DZ(ID)  / yhat
             EM(3,:) = EM(3,:) + RTM * AZ(ISR,:)    * LMBDASQ / yhat
             HM(1,:) = HM(1,:) + RTM * AZDY
             HM(2,:) = HM(2,:) - RTM * AZDX
             EM(1,:) = EM(1,:) - RTE * FZDY
             EM(2,:) = EM(2,:) + RTE * FZDX
-            HM(1,:) = HM(1,:) + RTE * FZDX     * DZ(ID)  / zhat
-            HM(2,:) = HM(2,:) + RTE * FZDY     * DZ(ID)  / zhat
+            HM(1,:) = HM(1,:) + RTE * FZDX          * DZ(ID)  / zhat
+            HM(2,:) = HM(2,:) + RTE * FZDY          * DZ(ID)  / zhat
             HM(3,:) = HM(3,:) + RTE * FZ(ISR,:)     * LMBDASQ / zhat
         end do
-    END DO
+        if ( SXLYR == RXLYR ) then
+            DZRS = ZR - ZS 
+            if ( DZRS == 0 ) DZRS = 0.001
+            if ( ZR > ZS .AND. ISR == 1 ) then
+                RTM = EXP( - UR * DZRS )
+                RTE = EXP( - UR * DZRS )
+                DZS = - UR
+            else if ( ZR < ZS .AND. ISR == 2 ) then
+                RTM = EXP(   UR * DZRS )
+                RTE = EXP(   UR * DZRS )
+                DZS = UR
+            else 
+                cycle
+            end if
+            EM(1,:) = EM(1,:) + RTM * AZDX         * DZS  / yhat
+            EM(2,:) = EM(2,:) + RTM * AZDY         * DZS  / yhat
+            EM(3,:) = EM(3,:) + RTM * AZ(ISR,:)    * LMBDASQ / yhat
+            HM(1,:) = HM(1,:) + RTM * AZDY
+            HM(2,:) = HM(2,:) - RTM * AZDX
+            EM(1,:) = EM(1,:) - RTE * FZDY
+            EM(2,:) = EM(2,:) + RTE * FZDX
+            HM(1,:) = HM(1,:) + RTE * FZDX          * DZS  / zhat
+            HM(2,:) = HM(2,:) + RTE * FZDY          * DZS  / zhat
+            HM(3,:) = HM(3,:) + RTE * FZ(ISR,:)     * LMBDASQ / zhat 
+        end IF
+    end do
+
 
 END SUBROUTINE MTSingleSourceFields   
 

@@ -1,4 +1,4 @@
-!  PROGRAM MTSPHERE Version 2.1.1 August 2026
+!  PROGRAM MTSPHERE Version 2.2.0 September 2026
 !    
 !    
 !        Developed by: Marc A. Vallée
@@ -12,10 +12,15 @@
 !    
 !  1 : Comment line
 !
-!  2 :  NLYR, NTERMS, ITM, NX, NY
+!  2 :  NLYR, NTERMS, NX, NY, NZ
 !       NLYR : Layer number
 !       NTERMS : Number of spherical harmonics computed ( 6 recommended )
 !       ITM : If ITM = 1, horizontal transverse magnetic solution is included.
+!       NX : Number of X values
+!       NY : Number of Y values
+!       ND : Number of D values
+!       IF NX and NY and ND > 0, XMIN, XMAX, YMIN, YMAX, DMIN and DMAX are provided.
+!       Otherwise, all X, Y, and D locations must be provided.
 !
 !  3 : NF, MINFREQ, MAXFREQ, LOGARITHMIC
 !      NF : Frequency number
@@ -29,11 +34,13 @@
 !    
 !  5.NLYR : RES(NLYR)
 !
-!  6 : XMIN XMAX
+!  6 : XMIN XMAX OR X1, X2 ... XN
 !
-!  7 : YMIN YMAX
+!  7 : YMIN YMAX OR Y1, Y2 ... YN
+!    
+!  8 : DMIN DMAX OR D1, D2 ... DN
 !
-!  Note: the sphere is located at X=0, Y=0.
+!  Note: the sphere is located at X=0, Y=0, D=DEPTH.
 ! 
     
 MODULE INPUT_DATA_FOR_MTSPHERE
@@ -42,18 +49,19 @@ IMPLICIT NONE
 
     INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
     INTEGER NR,NW,NW1,NW2,NLG,NSPH,LOGARITHMIC,NF,NLYR,QQDT(8),QQHMS(2),NTERMS, &
-        NX, NY, JX, JY
-    REAL MINFREQ, MAXFREQ, RADIUS, DEPTH, SPHRES, XMIN, XMAX, YMIN, YMAX, DX, DY
+        NX, NY, ND, JX, JY, JD
+    REAL MINFREQ, MAXFREQ, RADIUS, DEPTH, SPHRES, XMIN, XMAX, YMIN, YMAX, DMIN, DMAX, DX, DY, DD
     REAL, DIMENSION(:),ALLOCATABLE :: RES, THK, FREQ
     CHARACTER(LEN=10) TIME,DATE,ZONE    
     CHARACTER(LEN=3) MONTH(12)
     CHARACTER(LEN=60) PVC
     CHARACTER(LEN=120) INP,TITLE
     DATA MONTH /'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'/
-    DATA PVC /'MTSphere - Version 2.1.1 - August 2026'/
-    REAL(KIND=QL), ALLOCATABLE :: X(:), Y(:), PXY(:,:,:), APPRES(:,:,:,:,:), PHASE(:,:,:,:,:)
-    COMPLEX(KIND=QL), ALLOCATABLE :: ZHAT(:,:),E(:,:,:),IMP(:,:,:,:,:), &
-                    ES(:,:,:,:,:),HS(:,:,:,:,:),ET(:,:,:,:,:),HT(:,:,:,:,:)
+    DATA PVC /'MTSphere - Version 2.2.0 - September 2026'/
+    REAL(KIND=QL), ALLOCATABLE :: X(:), Y(:), D(:), PXYD(:,:,:,:), APPRES(:,:,:,:,:,:), PHASE(:,:,:,:,:,:), DPTHL(:)
+    COMPLEX(KIND=QL), ALLOCATABLE :: K(:,:), Z(:,:), E(:,:,:),IMP(:,:,:,:,:,:), &
+                    ES(:,:,:,:,:,:),HS(:,:,:,:,:,:),ET(:,:,:,:,:,:),HT(:,:,:,:,:,:), &
+                    PSIAT(:,:,:), PSIFT(:,:,:)
     LOGICAL POSITION
     
     CONTAINS
@@ -89,21 +97,22 @@ IMPLICIT NONE
     READ(NR,'(A)') TITLE
     WRITE(NW,'(/1X,A)') TRIM (TITLE)
         
-    READ(NR,*) NLYR, NTERMS, NX, NY
-    if ( NX < 0 .OR. NY < 0 ) then
+    READ(NR,*) NLYR, NTERMS, NX, NY, ND
+    if ( NX < 0 .OR. NY < 0 .OR. ND < 0 ) then
         POSITION = .TRUE.
         NX = ABS(NX)
         NY = ABS(NY)
+        ND = ABS(ND)
     else
         POSITION = .FALSE.
     end IF
     READ(NR,*) NF, MINFREQ, MAXFREQ, LOGARITHMIC
     READ(NR,*) RADIUS, DEPTH, SPHRES
     
-    ALLOCATE ( RES(NLYR), THK(NLYR-1), FREQ(NF), X(NX), Y(NY), PXY(NX,NY,3) )
-    ALLOCATE ( ZHAT(NF,NLYR), E(NF,0:NLYR,2), APPRES(NF,NX,NY,2,2), & 
-        PHASE(NF,NX,NY,2,2), IMP(NF,NX,NY,3,2), ES(NF,NX,NY,3,2), HS(NF,NX,NY,3,2), &
-                                                ET(NF,NX,NY,3,2), HT(NF,NX,NY,3,2) )
+    ALLOCATE ( RES(NLYR), THK(NLYR-1), FREQ(NF), X(NX), Y(NY), D(ND), PXYD(NX,NY,ND,3) )
+    ALLOCATE ( K(NF,0:NLYR), Z(NF,0:NLYR), E(NF,0:NLYR,2), APPRES(NF,NX,NY,ND,2,2), DPTHL(NLYR), & 
+        PHASE(NF,NX,NY,ND,2,2), IMP(NF,NX,NY,ND,3,2), ES(NF,NX,NY,ND,3,2), HS(NF,NX,NY,ND,3,2), &
+        PSIAT(2,NTERMS,-1:1),PSIFT(2,NTERMS,-1:1),ET(NF,NX,NY,ND,3,2), HT(NF,NX,NY,ND,3,2) )
     
     WRITE(NW,*)'Number of layers:',NLYR
     WRITE(NW,*)'Number of frequencies:',NF
@@ -127,32 +136,45 @@ IMPLICIT NONE
     if ( POSITION ) THEN
         read(NR,*)X
         read(NR,*)Y
+        read(NR,*)D
     else
         READ(NR,*)XMIN, XMAX
         READ(NR,*)YMIN, YMAX
+        read(NR,*)DMIN, DMAX
         if ( NX > 1 ) THEN
             DX = ( XMAX - XMIN ) / ( NX - 1 )
         else
             DX = 0
         end if
+        DO JX = 1, NX
+            X(JX) = XMIN + ( JX - 1 ) * DX
+        end DO
         if ( NY > 1 ) THEN
             DY = ( YMAX - YMIN ) / ( NY - 1 )
         else
             dy = 0
         end if
-        DO JX = 1, NX
-            X(JX) = XMIN + ( JX - 1 ) * DX
-        end DO
         do JY = 1, NY
             Y(JY) = YMIN + ( JY - 1 ) * DY
         end do
+        if ( ND > 1 ) THEN
+            DD = ( DMAX - DMIN ) / ( ND - 1 )
+        else
+            DD = 0
+        end if
+        do JD = 1, ND
+            D(JD) = DMIN + ( JD - 1 ) * DD
+        end do
     end IF
         
-    PXY = 0._QL
+    PXYD = 0._QL
     DO JX = 1, NX
         DO JY = 1, NY
-            PXY(JX,JY,1) = X(JX)
-            PXY(JX,JY,2) = Y(JY)
+            do JD = 1, ND
+                PXYD(JX,JY,JD,1) = X(JX)
+                PXYD(JX,JY,JD,2) = Y(JY)
+                PXYD(JX,JY,JD,3) = D(JD)
+            end DO
         END DO
     END do
         
@@ -171,22 +193,27 @@ USE INPUT_DATA_FOR_MTSPHERE
 
 IMPLICIT NONE
 
+    integer JZ
     REAL CMP_START, CMP_END, ELAPSED
     
      CALL CPU_TIME (CMP_START)
      CALL READ_PARAMETERS
  
-    CALL PLANEWAVEIMPEDANCE(NW, NLYR, THK, RES, NF, FREQ, ZHAT, E)
+    CALL PLANEWAVEIMPEDANCE(NW, NLYR, THK, RES, NF, FREQ, K, Z, E)
     
     ES = (0._QL,0._QL)
     HS = (0._QL,0._QL)
+    DPTHL = 0._QL
+    DO JZ = 1, NLYR-1
+        DPTHL(JZ+1) = DPTHL(JZ) + THK(JZ)
+    END DO
    
-    CALL MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, RADIUS, SPHRES, ZHAT, E, ES, HS) 
-    CALL GETIMPEDANCE(NF,NX,NY,ZHAT(:,1),E(:,0,:),ES,HS,IMP,ET,HT)
-    CALL APPARENTRESISTIVITY(NF, NX, NY, FREQ, IMP, APPRES, PHASE )
-    CALL WRITERESULTS(NW, NW1, NW2, NF, NX, NY, FREQ, PXY, APPRES, PHASE, IMP, ES, HS, ET, HT)
+    CALL MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DEPTH, RADIUS, SPHRES, E, DPTHL, ES, HS)    
+    CALL GETIMPEDANCE(NF,NX,NY,ND,NLYR,NTERMS,PXYD,DPTHL,K,Z,DEPTH,RADIUS,E,ES,HS,IMP,ET,HT)
+    CALL APPARENTRESISTIVITY(NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE )
+    CALL WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE, IMP, ES, HS, ET, HT)
     
-    deallocate ( RES, THK, FREQ, PXY, ZHAT, E, APPRES, PHASE, IMP, ES, HS, ET, HT )
+    deallocate ( RES, THK, FREQ, PXYD, K, Z, DPTHL, E, APPRES, PHASE, IMP, ES, HS, ET, HT )
    
     CALL DATE_AND_TIME (DATE, TIME, ZONE, QQDT)
     QQHMS(1:2) = QQDT(5:6)
@@ -205,7 +232,7 @@ IMPLICIT NONE
    
     END PROGRAM MAIN
     
-SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, FREQ, PXY, APPRES, PHASE, IMP, ES, HS, ET, HT)
+SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE, IMP, ES, HS, ET, HT)
 
 ! Subroutine to write all the results in an ASCII file
 
@@ -227,11 +254,11 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, FREQ, PXY, APPRES, PHASE, IMP,
 
     IMPLICIT NONE
     INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
-    INTEGER NW, NW1, NW2, NF, NX, NY, JF, JX, JY, I, J
+    INTEGER NW, NW1, NW2, NF, NX, NY, ND, JF, JX, JY, JD, I, J
     REAL FREQ(NF)
-    REAL(KIND=QL) PXY(NX,NY,2), APPRES(NF,NX,NY,2,2), PHASE(NF,NX,NY,2,2)
-    COMPLEX(KIND=QL) IMP(NF,NX,NY,3,2), ES(NF,NX,NY,3,2), HS(NF,NX,NY,3,2), &
-                                        ET(NF,NX,NY,3,2), HT(NF,NX,NY,3,2)
+    REAL(KIND=QL) PXYD(NX,NY,ND,3), APPRES(NF,NX,NY,ND,2,2), PHASE(NF,NX,NY,ND,2,2)
+    COMPLEX(KIND=QL) IMP(NF,NX,NY,ND,3,2), ES(NF,NX,NY,ND,3,2), HS(NF,NX,NY,ND,3,2), &
+                                        ET(NF,NX,NY,ND,3,2), HT(NF,NX,NY,ND,3,2)
         
     DO I = 1, 2
         DO J = 1, 2
@@ -258,17 +285,19 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, FREQ, PXY, APPRES, PHASE, IMP,
             WRITE(NW,100)
             WRITE(NW1,100)
             DO JF = 1, NF
-                DO JX = 1, NX
-                    DO JY = 1, NY
-                        WRITE(NW,'(G15.7,2F10.1,10G15.7)')FREQ(JF),PXY(JX,JY,:),APPRES(JF,JX,JY,I,J), &
-                                                                  PHASE (JF,JX,JY,I,J), &
-                                                                  IMP(JF,JX,JY,I,J)
-                        WRITE(NW1,'(G15.7,2F10.1,10G15.7)')FREQ(JF),PXY(JX,JY,:),APPRES(JF,JX,JY,I,J), &
-                                                                  PHASE (JF,JX,JY,I,J), &
-                                                                  IMP(JF,JX,JY,I,J)
+                do JD = 1, ND
+                    DO JX = 1, NX
+                        DO JY = 1, NY
+                            WRITE(NW,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),APPRES(JF,JX,JY,JD,I,J), &
+                                                                      PHASE (JF,JX,JY,JD,I,J), &
+                                                                      IMP(JF,JX,JY,JD,I,J)
+                            WRITE(NW1,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),APPRES(JF,JX,JY,JD,I,J), &
+                                                                      PHASE (JF,JX,JY,JD,I,J), &
+                                                                      IMP(JF,JX,JY,JD,I,J)
+                        END DO
                     END DO
                 END DO
-            END DO
+            end do
         END DO
     END DO
 
@@ -277,13 +306,15 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, FREQ, PXY, APPRES, PHASE, IMP,
     WRITE(NW,120)
     WRITE(NW1,120)
     DO JF = 1, NF
-        DO JX = 1, NX
-            DO JY = 1, NY
-                WRITE(NW,'(G15.7,2F10.1,10G15.7)')FREQ(JF),PXY(JX,JY,:),IMP(JF,JX,JY,3,:)
-                WRITE(NW1,'(G15.7,2F10.1,10G15.7)')FREQ(JF),PXY(JX,JY,:),IMP(JF,JX,JY,3,:)
+        do JD = 1, ND
+            DO JX = 1, NX
+                DO JY = 1, NY
+                    WRITE(NW,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),IMP(JF,JX,JY,JD,3,:)
+                    WRITE(NW1,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),IMP(JF,JX,JY,JD,3,:)
+                END DO
             END DO
         END DO
-    END DO
+    end do
     
       DO I = 1, 2
         SELECT CASE(I)
@@ -299,29 +330,38 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, FREQ, PXY, APPRES, PHASE, IMP,
         write(NW,'(/''Secondary'')')
         write(nw2,'(/''Secondary'')')
         DO JF = 1, NF
-            DO JX = 1, NX
-                DO JY = 1, NY
-                    WRITE(NW,'(G15.7,2F10.1,20G15.7)')FREQ(JF),PXY(JX,JY,:),(ES(JF,JX,JY,J,I),J=1,2),(HS(JF,JX,JY,J,I),J=1,3)
-                    WRITE(NW2,'(G15.7,2F10.1,20G15.7)')FREQ(JF),PXY(JX,JY,:),(ES(JF,JX,JY,J,I),J=1,2),(HS(JF,JX,JY,J,I),J=1,3)
+            do JD = 1, ND
+                DO JX = 1, NX
+                    DO JY = 1, NY
+                        WRITE(NW,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
+                            (ES(JF,JX,JY,JD,J,I),J=1,3),(HS(JF,JX,JY,JD,J,I),J=1,3)
+                        WRITE(NW2,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
+                            (ES(JF,JX,JY,JD,J,I),J=1,3),(HS(JF,JX,JY,JD,J,I),J=1,3)
+                    END DO
                 END DO
             END DO
-        END DO
+        end do
         write(NW,'(/''Total'')')
         write(Nw2,'(/''Total'')')
         DO JF = 1, NF
-            DO JX = 1, NX
-                DO JY = 1, NY
-                    WRITE(NW,'(G15.7,2F10.1,20G15.7)')FREQ(JF),PXY(JX,JY,:),(ET(JF,JX,JY,J,I),J=1,2),(HT(JF,JX,JY,J,I),J=1,3)
-                    WRITE(NW2,'(G15.7,2F10.1,20G15.7)')FREQ(JF),PXY(JX,JY,:),(ET(JF,JX,JY,J,I),J=1,2),(HT(JF,JX,JY,J,I),J=1,3)
+            do JD = 1, ND
+                DO JX = 1, NX
+                    DO JY = 1, NY
+                        WRITE(NW,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
+                            (ET(JF,JX,JY,JD,J,I),J=1,3),(HT(JF,JX,JY,JD,J,I),J=1,3)
+                        WRITE(NW2,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
+                            (ET(JF,JX,JY,JD,J,I),J=1,3),(HT(JF,JX,JY,JD,J,I),J=1,3)
+                    END DO
                 END DO
             END DO
-        END DO
+        end do
     END DO  
     
-100 FORMAT(T7,'Frequency',T25,'X',T35,'Y',T38,'Apparent_res.',T57,'Phase',T71,'Imp.(real)',T86,'Imp.(imag)')
-120 FORMAT(T7,'Frequency',T25,'X',T35,'Y',T42,'Kzx(real)',T57,'Kzx(imag)',T72,'Kzy(real)',T87,'Kzy(imag)')
-140 FORMAT(T7,'Frequency',T25,'X',T35,'Y',T42,'Ex(real)',T57,'Ex(imag)',T72,'Ey(real)',T87,'Ey(imag)', &
-    T102,'Hx(real)',T117,'Hx(imag)',T132,'Hy(real)',T147,'Hy(imag)',T162,'Hz(real)',T177,'Hz(imag)')
+100 FORMAT(T7,'Frequency',T25,'X',T35,'Y',T45,'D',T48,'Apparent_res.',T67,'Phase',T81,'Imp.(real)',T96,'Imp.(imag)')
+120 FORMAT(T7,'Frequency',T25,'X',T35,'Y',T45,'D',T52,'Kzx(real)',T67,'Kzx(imag)',T82,'Kzy(real)',T97,'Kzy(imag)')
+    140 FORMAT(T7,'Frequency',T25,'X',T35,'Y',T45,'D',T52,'Ex(real)',T67,'Ex(imag)',T82,'Ey(real)',T97,'Ey(imag)', &
+    T112,'Ez(real)',T127,'Ez(imag)', &
+    T142,'Hx(real)',T157,'Hx(imag)',T172,'Hy(real)',T187,'Hy(imag)',T202,'Hz(real)',T217,'Hz(imag)')
 
 END SUBROUTINE WRITERESULTS
   

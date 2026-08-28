@@ -1,4 +1,4 @@
-SUBROUTINE PlaneWaveImpedance(NW,NLYR,THK,RES,NF,FREQ,ZHAT,E)
+﻿SUBROUTINE PlaneWaveImpedance(NW,NLYR,THK,RES,NF,FREQ,K,Z,E)
     
 ! Subroutine to compute the coefficients of a plane wave propagating
 ! in a layered earth
@@ -24,44 +24,44 @@ SUBROUTINE PlaneWaveImpedance(NW,NLYR,THK,RES,NF,FREQ,ZHAT,E)
     COMPLEX(KIND=QL), PARAMETER :: CI = CMPLX (0.D0, 1.D0, KIND=QL)
     INTEGER JL,NLYR,JF,NF,NW
     REAL FREQ(NF),THK(NLYR-1),RES(NLYR), W
-    COMPLEX(KIND=QL) K(0:NLYR),Z(0:NLYR),ZHAT(NF,NLYR),EI,E(NF,0:NLYR,2),A,B,DEN
+    COMPLEX(KIND=QL) K(NF,0:NLYR),Z(NF,0:NLYR),ZHAT(NLYR),EI,E(NF,0:NLYR,2),A,B,DEN
     
     E = (0._QL,0._QL)
     DO JF = 1, NF
         W = 2._QL * PI * FREQ(JF) 
         DO JL = 0,NLYR
             if ( JL == 0 ) then
-                K(JL) = w * SQRT ( mu0 * eps0 )
+                K(JF,JL) = w * SQRT ( mu0 * eps0 )
             else
-                K(JL) = SQRT ( - CI * MU0 * W / RES(JL) )
+                K(JF,JL) = SQRT ( - CI * MU0 * W / RES(JL) )
             end if
-            Z(JL) = W * MU0 / K(JL)
+            Z(JF,JL) = W * MU0 / K(JF,JL)
         END DO
-        ZHAT(JF,NLYR) = Z(NLYR)
+        ZHAT(NLYR) = Z(JF,NLYR)
         DO JL = NLYR-1,1,-1
-            A = ZHAT(JF,JL+1)+Z(JL)*TANH(CI*K(JL)*THK(JL))
-            B = Z(JL)+ZHAT(JF,JL+1)*TANH(CI*K(JL)*THK(JL))
-            ZHAT(JF,JL) = Z(JL)*A/B                              
+            A = ZHAT(JL+1)+Z(JF,JL)*TANH(CI*K(JF,JL)*THK(JL))
+            B = Z(JF,JL)+ZHAT(JL+1)*TANH(CI*K(Jf,JL)*THK(JL))
+            ZHAT(JL) = Z(JF,JL)*A/B                              
         END DO
         DO JL = 0,NLYR
             if ( JL == 0 ) then
                 E(JF,JL,1) = 1._QL
-                E(JF,JL,2) = ( ZHAT(JF,1) - Z(0) ) / ( ZHAT(JF,1) + Z(0) )
+                E(JF,JL,2) = ( ZHAT(1) - Z(JF,0) ) / ( ZHAT(1) + Z(JF,0) )
             ELSE 
             	IF ( JL == 1 ) THEN
                		EI = E(JF,0,1) + E(JF,0,2)
                	ELSE
-               		EI = E(JF,JL-1,1) * EXP ( - CI * K(JL-1) * THK(JL-1) ) + &
-                         E(JF,JL-1,2) * EXP (   CI * K(JL-1) * THK(JL-1) ) 
+               		EI = E(JF,JL-1,1) * EXP ( - CI * K(JF,JL-1) * THK(JL-1) ) + &
+                         E(JF,JL-1,2) * EXP (   CI * K(JF,JL-1) * THK(JL-1) ) 
                 END IF
                 if ( JL == NLYR ) then
                 	E(JF,JL,1) = EI
                 	E(JF,JL,2) = (0._QL,0._QL)
                 ELSE
-                	DEN = ( ZHAT(JF,JL+1) - Z(JL) ) * EXP ( - CI * 2._QL * K(JL) * THK(JL) ) + &
-                		  ( ZHAT(JF,JL+1) + Z(JL) )
-                	E(JF,JL,1) = ( ZHAT(JF,JL+1) + Z(JL) ) * EI / DEN
-                	E(JF,JL,2) = ( ZHAT(JF,JL+1) - Z(JL) ) * EXP(- CI * 2._QL * K(JL)* THK(JL) ) * EI / DEN
+                	DEN = ( ZHAT(JL+1) - Z(JF,JL) ) * EXP ( - CI * 2._QL * K(JF,JL) * THK(JL) ) + &
+                		  ( ZHAT(JL+1) + Z(JF,JL) )
+                	E(JF,JL,1) = ( ZHAT(JL+1) + Z(JF,JL) ) * EI / DEN
+                	E(JF,JL,2) = ( ZHAT(JL+1) - Z(JF,JL) ) * EXP(- CI * 2._QL * K(JF,JL)* THK(JL) ) * EI / DEN
                 END IF
              END IF	
         END DO
@@ -69,9 +69,9 @@ SUBROUTINE PlaneWaveImpedance(NW,NLYR,THK,RES,NF,FREQ,ZHAT,E)
     
     WRITE(NW,'(/'' Layer impedance'')')
     DO JF = 1, NF
-        DO JL = 1, NLYR
+        DO JL = 0, NLYR
             WRITE(NW,'('' Frequency:'',G15.7,'', Layer:'',I5,'', Impedance:'',2G15.7)') &
-                FREQ(JF),JL,ZHAT(JF,JL)
+                FREQ(JF),JL,Z(JF,JL)
         END DO
     END DO
     
@@ -86,7 +86,7 @@ SUBROUTINE PlaneWaveImpedance(NW,NLYR,THK,RES,NF,FREQ,ZHAT,E)
     
 END SUBROUTINE PlaneWaveImpedance 
     
-SUBROUTINE APPARENTRESISTIVITY(NF, NX, NY, FREQ, IMP, APPRES, PHASE)
+SUBROUTINE APPARENTRESISTIVITY(NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE)
 
 ! Subroutine to compute the apparent resistivity and phase
 
@@ -106,21 +106,24 @@ IMPLICIT NONE
     INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
     REAL(KIND=QL), PARAMETER :: MU0=12.56637D-7
     REAL(KIND=QL), PARAMETER :: PI = 3.141592653589793    
-    INTEGER NF, NX, NY, JF, JX, JY, I, J
+    INTEGER NF, NX, NY, ND, JF, JX, JY, JD, I, J
     REAL FREQ(NF)
-    REAL(KIND=QL) APPRES(NF,NX,NY,2,2), PHASE(NF,NX,NY,2,2), DEN
-    COMPLEX(KIND=QL) IMP(NF,NX,NY,3,2), TEST 
+    REAL(KIND=QL) APPRES(NF,NX,NY,ND,2,2), PHASE(NF,NX,NY,ND,2,2), DEN
+    COMPLEX(KIND=QL) IMP(NF,NX,NY,ND,3,2), TEST 
     
     DO JF = 1, NF
         DEN = 2._QL * PI * FREQ(JF) * MU0
         DO JX = 1, NX
             DO JY = 1, NY
-                DO I = 1, 2
-                    DO J = 1, 2
-                        APPRES(JF,JX,JY,I,J) =  ABS ( IMP(JF,JX,JY,I,J) ) ** 2 / DEN
-                        PHASE(JF,JX,JY,I,J) = ATAN2 ( AIMAG( IMP(JF,JX,JY,I,J) ), REAL( IMP(JF,JX,JY,I,J) )  ) * 180 / PI
+                do JD = 1, ND
+                    DO I = 1, 2
+                        DO J = 1, 2
+                            APPRES(JF,JX,JY,JD,I,J) =  ABS ( IMP(JF,JX,JY,JD,I,J) ) ** 2 / DEN
+                            PHASE(JF,JX,JY,JD,I,J) = ATAN2 ( AIMAG( IMP(JF,JX,JY,JD,I,J) ), &
+                                                              REAL( IMP(JF,JX,JY,JD,I,J) )  ) * 180 / PI
+                        END DO
                     END DO
-                END DO
+                end DO
             END DO
         END DO
     END DO
@@ -219,8 +222,8 @@ subroutine planewavefieldssphericalharmonics(E0,nterms,ic,id,k,yhat,zhat,psia,ps
 
 end subroutine planewavefieldssphericalharmonics    
 
-SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, &
-                      RADIUS, SRES, ZHAT, E, ES, HS)
+SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DEPTH, &
+                      RADIUS, SRES, E, DPTHL, ES, HS)
 
 ! Main subroutine to compute the sphere response
 
@@ -233,7 +236,7 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
 ! NX: number of X locations
 ! NY: number of Y locations
 ! FREQ: vector of frequencies
-! PXY: array of locations (NX,NY)
+! PXYZ: array of locations (NX,NY,NZ)
 ! THK: number of thicknesses
 ! RES: number of resistivities
 ! DEPTH: depth of the sphere
@@ -250,9 +253,9 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
 
     USE PRECISION
 
-    INTEGER NW, NF, NLYR, JF, JX, JY, JZ, SLYR, N, M, NP, MP, NTERMS, NX, NY, ID, I, TP, IP
+    INTEGER NW, NF, NLYR, JF, JX, JY, JZ, SXLYR, N, M, NP, MP, NTERMS, NX, NY, ND, JD, I, TP, IP
     REAL THK(NLYR-1), RES(NLYR), DEPTH, FREQ(NF), SRES, RADIUS
-    REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,DEPTHD, W, RADIUSD, PXY(NX,NY,3)
+    REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,W, RADIUSD, PXYD(NX,NY,ND,3), R
     COMPLEX(KIND=QL) E(NF,0:NLYR,2),EL(2),YHATL(0:NLYR),ZHATL(0:NLYR),YHATS,ZHATS, &
                      PSIAI(2,NTERMS,-1:1), & 
                      PSIFI(2,NTERMS,-1:1), &
@@ -260,8 +263,10 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
                      PSIFC(NTERMS,-1:1), &
                      PSIAR(NTERMS,-1:1), &
                      PSIFR(NTERMS,-1:1), &
-                     ES(NF,NX,NY,3,2), HS(NF,NX,NY,3,2), &
-                     RTM(NTERMS), RTE(NTERMS), ZHAT(NF,NLYR)
+                     PSIAT(NTERMS,-1:1), &
+                     PSIFT(NTERMS,-1:1), &
+                     ES(NF,NX,NY,ND,3,2), HS(NF,NX,NY,ND,3,2), &
+                     RTM(NTERMS), RTE(NTERMS), TTM(NTERMS), TTE(NTERMS)
     COMPLEX(KIND=QL), ALLOCATABLE :: AI(:,:,:)
     
     THKD = 0._QL
@@ -270,15 +275,12 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
     DEPTHD = REAL ( DEPTH, KIND=QL)
     ALLOCATE ( AI (-1:1, 2*NTERMS, 2*NTERMS ) )
     
-     DPTHL = 0._QL
-     DO JZ = 1, NLYR-1
-       DPTHL(JZ+1) = DPTHL(JZ) + THKD(JZ)
-     END DO
+     ! Identify sphere layer
      ZS = REAL (DEPTH,QL)
-     SLYR = 0                ! Identify layer containing loop or GW source
+     SXLYR = 0                
      DO JZ = NLYR,1,-1
         IF (ZS > DPTHL(JZ)) THEN
-            SLYR = JZ
+            SXLYR = JZ
             EXIT
         END IF
      END DO
@@ -296,27 +298,29 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
         ZHATL = CI * W * MU0
         YHATS = 1 / SRES + CI * W * EPS0
         ZHATS = CI * W * MU0
-        CALL REFLECTIONCOEFFICIENTS(NTERMS,RADIUSD,YHATL(SLYR),ZHATL(SLYR),YHATS,ZHATS,RTM,RTE)
-        call MTLayeredEarthCorrection(NW,NTERMS,NLYR,THKD,ZS,RADIUSD,SLYR,YHATL,ZHATL,YHATS,ZHATS,RTM,RTE,AI)
+        CALL REFLECTIONCOEFFICIENTS(NTERMS,RADIUSD,YHATL(SXLYR),ZHATL(SXLYR), &
+            YHATS,ZHATS,RTM,RTE,TTM,TTE)
+        call MTLayeredEarthCorrection(NW,NTERMS,NLYR,THKD,DPTHL,ZS,RADIUSD, &
+            SXLYR,YHATL,ZHATL,YHATS,ZHATS,RTM,RTE,AI)
         WRITE(NW,'(/'' Reflection coefficients:'')')
         DO N = 1, NTERMS
             WRITE(NW,'(I5,100G15.7)')N,RTM(N),RTE(N)
         END DO
-        EL = E(JF,SLYR,:)
-        CALL PLANEWAVESPHERICALHARMONICS(NTERMS,YHATL(SLYR),ZHATL(SLYR),ZS-DPTHL(SLYR),EL,PSIAI,PSIFI)
-        DO ID = 1, 2 ! X and Y directions
+        EL = E(JF,SXLYR,:)
+        CALL PLANEWAVESPHERICALHARMONICS(NTERMS,YHATL(SXLYR),ZHATL(SXLYR),ZS-DPTHL(SXLYR),EL,PSIAI,PSIFI)
+        DO IP = 1, 2 ! X and Y directions
             WRITE(NW,'(/'' Plane wave spherical harmonics:'')')
-            IF ( ID == 1 ) THEN
+            IF ( IP == 1 ) THEN
                 WRITE(NW,'('' X directed propagation'')')
             ELSE
                 WRITE(NW,'('' Y directed propagation'')')
             END IF
             DO N = 1, NTERMS
                 DO M = -1, 1, 2
-                    WRITE(NW,'(2I5,10G15.7)')N,M,PSIAI(ID,N,M),PSIFI(ID,N,M)
+                    WRITE(NW,'(2I5,10G15.7)')N,M,PSIAI(IP,N,M),PSIFI(IP,N,M)
                 END DO
             END DO
-            CALL MTSphereReflectionCORRECTION(NTERMS,AI,PSIAI(ID,:,:),PSIFI(ID,:,:),PSIAC,PSIFC)
+            CALL MTSphereReflectionCORRECTION(NTERMS,AI,PSIAI(IP,:,:),PSIFI(IP,:,:),PSIAC,PSIFC)
             WRITE(NW,'(/'' Corrected potentials'')')
             DO N = 1, NTERMS
                 DO M = -1, 1, 2
@@ -325,29 +329,67 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
             END DO
             PSIAR = ZERO
             PSIFR = ZERO
-           DO N =  1, NTERMS
+            PSIAT = ZERO
+            PSIFT = ZERO
+            DO N =  1, NTERMS
                 do M = -1, 1, 2
                     PSIAR(N,M) = RTM(N) * PSIAC(N,M)
                     PSIFR(N,M) = RTE(N) * PSIFC(N,M)
+                    PSIAT(N,M) = TTM(N) * PSIAC(N,M)
+                    PSIFT(N,M) = TTE(N) * PSIFC(N,M)
                 end do
             END DO
-            CALL MTSPHERE_SingleSource(NTERMS,PSIAR,PSIFR,DEPTHD,NX,NY,PXY,NLYR,THKD,YHATL,ZHATL,ES(JF,:,:,:,ID),HS(JF,:,:,:,ID))
+            CALL MTSPHERE_SingleSource(NTERMS,PSIAR,PSIFR,PSIAT,PSIFT,NX,NY,ND,PXYD,NLYR, &
+                THKD,YHATL,ZHATL,YHATS,ZHATS,DPTHL,ZS,RADIUS,ES(JF,:,:,:,:,IP),HS(JF,:,:,:,:,IP))
+            call dynamiccleaning(ES(JF,:,:,:,:,IP))
+            call dynamiccleaning(HS(JF,:,:,:,:,IP))
             WRITE(NW,'(/''Induced fields'')')
             DO JX = 1, NX
                 DO JY = 1, NY
-                    WRITE(NW,'(G15.7,2I5,20G15.7)')FREQ(JF),JX,JY,ES(JF,JX,JY,:,ID),HS(JF,JX,JY,:,ID)
+                    DO JD = 1, ND
+                        WRITE(NW,'(G15.7,3I5,20G15.7)')FREQ(JF),JX,JY,JD,&
+                            ES(JF,JX,JY,JD,:,IP),HS(JF,JX,JY,JD,:,IP)
+                    end DO
                 END DO
             END DO
         END DO
     end do
     
     DEALLOCATE ( AI )
+    
+    contains
 
+    subroutine dynamiccleaning(F)
+    
+    integer jx, jy, jd
+    real(kind=QL) max_local, ceiling_local
+    complex(kind=QL) F(NX,NY,ND,3), T(3)
+    
+    do jx = 1, nx
+        do jy = 1, ny
+            do jd = 1, nd
+                T = f(jx,jy,jd,:)   
+                max_local = MAX(ABS(real(t(1))),ABS(AIMAG(t(1))), &
+                                ABS(real(t(2))),ABS(AIMAG(t(2))), &
+                                ABS(real(t(2))),ABS(AIMAG(t(3))))
+                ceiling_local = max_local * 1.D-12
+                do IC = 1,3
+                    if ( ABS(real(T(IC))) < ceiling_local) T(IC) = CMPLX(0._QL, AIMAG(T(IC)))
+                    if ( ABS(aimag(T(IC))) < ceiling_local) T(IC) = CMPLX(real(T(IC)),0._QL)
+                end do
+                f(Jx,jy,jd,:) = T
+            end do
+        end do
+    end do    
+                 
+    end subroutine dynamiccleaning
+    
     END SUBROUTINE MTSPHERE3D
     
-    SUBROUTINE GETIMPEDANCE(NF,NX,NY,ZHAT,E,ES,HS,IMPEDANCE,ET,HT)
     
-! Subroutine to compute the ground impedance and total fields from the
+    SUBROUTINE GETIMPEDANCE(NF,NX,NY,ND,NLYR,NTERMS,PXYD,DPTHL,K,Z,DEPTH,RADIUS,E,ES,HS,IMPEDANCE,ET,HT)
+    
+! Subroutine to compute the point impedances and total fields from the
 ! primary and secondary fields
 
 !          Input
@@ -364,54 +406,142 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, FREQ, PXY, THK, RES, DEPTH, 
 ! ET: total electric field
 ! HT: total magnetic field
     
-        IMPLICIT NONE
-        INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
-        REAL(KIND=QL), PARAMETER :: EPS0=8.854156D-12, MU0=12.56637D-7
-        INTEGER NX, NY, IX, IY, IC, ID, I, J, NF, JF
-        COMPLEX(KIND=QL) IMPEDANCE(NF,NX,NY,3,2), ZHAT(NF), E(NF,2), &
-                         ES(NF,NX,NY,3,2), HS(NF,NX,NY,3,2), &
-                         ET(NF,NX,NY,3,2), HT(NF,NX,NY,3,2), &
-                         A(2), B(2), C(2), DEN, EP, HP, EE, HH
+        use precision
+    
+        INTEGER NX, NY, ND, JX, JY, JD, IC, IP, J, NF, JF, NLYR, RXLYR
+        real DEPTH, RADIUS
+        real(KIND=QL) DR, PXYD(NX,NY,ND,3), DPTHL(NLYR), R
+        COMPLEX(KIND=QL) IMPEDANCE(NF,NX,NY,ND,3,2), K(NF,0:NLYR), Z(NF,0:NLYR), E(NF,0:NLYR,2), &
+                         ES(NF,NX,NY,ND,3,2), HS(NF,NX,NY,ND,3,2), &
+                         ET(NF,NX,NY,ND,3,2), HT(NF,NX,NY,ND,3,2), &
+                         A(2), B(2), C(2), DEN, EP, HP, EE, HH, &
+                         YHATS, ZHATS, Hmat(2,2), Hplus(2,2), &
+                         PSIAT(2,NTERMS,-1:1),PSIFT(2,NTERMS,-1:1)
+        
+        ! Compute the primary field at each vertical location
+        ! Search
+        
         ET = ES
         HT = HS
         do JF = 1, NF
-            EE = E(JF,1) + E(JF,2)
-            HH = EE / ZHAT(JF)
-            do IX = 1, nx
-                do iy = 1, ny
-                    ET(JF,ix,iy,1,1) = ET(JF,ix,iy,1,1) + EE
-                    ET(JF,ix,iy,2,2) = ET(JF,ix,iy,2,2) + EE
-                    HT(JF,ix,iy,1,2) = HT(JF,ix,iy,1,2) - HH
-                    HT(JF,ix,iy,2,1) = HT(JF,ix,iy,2,1) + HH
+            do Jd = 1, ND                        
+                DR = PXYD(1,1,JD,3)
+                RXLYR = 0
+                do Jl = NLYR,1,-1
+                    if ( DR > DPTHL(Jl) ) then
+                        RXLYR = JL
+                        exit
+                    end if
                 end do
-            end do
-            DO IX = 1, NX
-                DO IY = 1, NY
-                    DO ID = 1, 2 ! X and Y direction
-                        A(ID) = HT(JF,IX,IY,1,ID)
-                        B(ID) = HT(JF,IX,IY,2,ID)
-                    END DO
-                    DEN = A(1) * B(2) - B(1) * A(2)
-                    DO IC = 1, 3 ! X, Y 
-                        IF ( IC < 3 ) THEN
-                            DO ID = 1, 2
-                                C(ID) = ET(JF,IX,IY,IC,ID)
-                            END DO
-                        ELSE
-                            DO ID = 1, 2
-                                C(ID) = HT(JF,IX,IY,3,ID)
-                            END DO
-                        END IF
-                        IMPEDANCE(JF,IX,IY,IC,1) = ( C(1) * B(2) - B(1) * C(2) ) / DEN !  Impedance x
-                        IMPEDANCE(JF,IX,IY,IC,2) = ( A(1) * C(2) - C(1) * A(2) ) / DEN !  Impedance y
+                do JX = 1, nx
+                    do Jy = 1, ny
+                        R = SQRT ( PXYD(JX,Jy,JD,1) ** 2 + PXYD(JX,JY,JD,2) ** 2 + ( PXYD(JX,JY,JD,3) - DEPTH) ** 2 )
+                        if ( R > RADIUS ) THEN
+                            if ( rXLYR == NLYR ) then
+                                EE = E(JF,NLYR,1) * EXP ( - CI * K(JF,RXLYR) * ( DR - DPTHL(RXLYR) ) )
+                                HH = E(JF,NLYR,1) / Z(JF,RXLYR)
+                            else if ( RXLYR == 0 ) THEN
+                                EE = E(JF,0,1) * EXP ( - CI * K(JF,RXLYR) * DR ) &
+                                   + E(JF,0,2) * EXP (   CI * K(JF,RXLYR) * DR )
+                                HH = ( E(JF,0,1) * EXP ( - CI * K(JF,RXLYR) * DR ) &
+                                     - E(JF,0,2) * EXP (   CI * K(JF,RXLYR) * DR ) ) / Z(JF,RXLYR)    
+                            else
+                                EE = E(JF,RXLYR,1) * EXP ( - CI * K(JF,RXLYR) * ( DR - DPTHL(RXLYR) ) ) &
+                                   + E(JF,RXLYR,2) * EXP (   CI * K(JF,RXLYR) * ( DR - DPTHL(RXLYR) ) )
+                                HH = ( E(JF,RXLYR,1) * EXP ( - CI * K(JF,RXLYR) * ( DR - DPTHL(RXLYR) ) ) &
+                                     - E(JF,RXLYR,2) * EXP (   CI * K(JF,RXLYR) * ( DR - DPTHL(RXLYR) ) ) ) / Z(JF,RXLYR)    
+                            end if
+                            ET(JF,jx,jy,jd,1,1) = ET(JF,jx,jy,jd,1,1) + EE
+                            ET(JF,jx,jy,jd,2,2) = ET(JF,jx,jy,jd,2,2) + EE
+                            HT(JF,jx,jy,jd,1,2) = HT(JF,jx,jy,jd,1,2) - HH
+                            HT(JF,jx,jy,jd,2,1) = HT(JF,jx,jy,jd,2,1) + HH
+                        end IF
+                        DO Ip = 1, 2 ! X and Y direction
+                            A(Ip) = HT(JF,jx,jy,jd,1,Ip)
+                            B(Ip) = HT(JF,jx,jy,jd,2,Ip)
+                        END DO
+                        
+                        ! Construction de la matrice H 2x2
+                        Hmat(1,1) = A(1)
+                        Hmat(1,2) = A(2)
+                        Hmat(2,1) = B(1)
+                        Hmat(2,2) = B(2)
+
+                        ! Pseudo-inverse (tolérance relative typique)
+                        CALL ZPINV2(Hmat, Hplus, 1.0D-12)
+                        
+                        DO IC = 1, 3 ! X, Y 
+                            IF ( IC < 3 ) THEN
+                                DO Ip = 1, 2
+                                    C(Ip) = ET(JF,jx,jy,jd,IC,Ip)
+                                END DO
+                            ELSE
+                                DO Ip = 1, 2
+                                    C(Ip) = HT(JF,jx,jy,jd,3,Ip)
+                                END DO
+                            END IF
+                            IMPEDANCE(JF,jx,jy,jd,IC,1) = C(1) * Hplus(1,1) + C(2) * Hplus(2,1) !  Impedance x
+                            IMPEDANCE(JF,jx,jy,jd,IC,2) = C(1) * Hplus(1,2) + C(2) * Hplus(2,2) !  Impedance y
+                        END DO
                     END DO
                 END DO
-            END DO
+            end DO
         end DO
         
-    END SUBROUTINE GETIMPEDANCE
+END SUBROUTINE GETIMPEDANCE
     
-SUBROUTINE MTLayeredEarthCorrection(NW,NTERMS,NLYR,THK,DEPTH,RADIUS,SLYR,YHATL,ZHATL,YHATS,ZHATS,RTM,RTE,AI)
+SUBROUTINE ZPINV2(A, Aplus, tol)
+
+  ! Moore-Penrose for 2D complex matrix
+
+  IMPLICIT NONE
+  INTEGER, PARAMETER :: DP = KIND(1.0D0)
+  COMPLEX(DP), INTENT(IN)  :: A(2,2)
+  COMPLEX(DP), INTENT(OUT) :: Aplus(2,2)
+  REAL(DP),    INTENT(IN)  :: tol
+
+  COMPLEX(DP) :: U(2,2), V(2,2), VT(2,2), W(2,2)
+  REAL(DP)    :: S(2), smax
+  COMPLEX(DP) :: work(10)
+  REAL(DP)    :: rwork(10)
+  INTEGER     :: info, i
+
+  ! Working copy
+  
+  W = A
+
+  CALL ZGESVD('A','A', 2, 2, W, 2, S, U, 2, VT, 2, &
+              work, 10, rwork, info)
+
+  IF (info /= 0) THEN
+     Aplus = (0.0_DP, 0.0_DP)
+     RETURN
+  END IF
+
+  smax = MAX(S(1), S(2))
+  DO i = 1, 2
+     IF (S(i) > tol * smax .AND. S(i) > 0.0_DP) THEN
+        S(i) = 1.0_DP / S(i)
+     ELSE
+        S(i) = 0.0_DP
+     END IF
+  END DO
+
+  ! Sigma+
+  W = (0.0_DP, 0.0_DP)
+  W(1,1) = S(1)
+  W(2,2) = S(2)
+
+  ! A+ = V * Sigma+ * U^H
+  ! VT contains V^H → V = CONJG(TRANSPOSE(VT))
+  
+  Aplus = MATMUL(W, CONJG(TRANSPOSE(U)))
+  Aplus = MATMUL(CONJG(TRANSPOSE(VT)), Aplus)
+  
+END SUBROUTINE ZPINV2
+    
+SUBROUTINE MTLayeredEarthCorrection(NW,NTERMS,NLYR,THK,DPTHL,DEPTH,RADIUS, &
+    SXLYR,YHATL,ZHATL,YHATS,ZHATS,RTM,RTE,AI)
 
 use precision
 
@@ -427,7 +557,7 @@ use precision
 ! THK: layer thicknesses
 ! DEPTH: sphere center depth
 ! RADIUS: sphere radius
-! SLYR: Sphere layer
+! SXLYR: Sphere layer
 ! YHATL: Layer admittivity
 ! ZHATL: Layer impedivity
 ! YHATS: Sphere admittivity
@@ -439,8 +569,8 @@ use precision
 
    IMPLICIT NONE
    INTEGER NTERMS, NLYR, N, M, ICR, IC, IH, IHR, NLAT, NLON, &
-       SLYR, NS, IR, INFO, NP, NW, JLAt, jlon, lwork
-   REAL(KIND=QL) THK(NLYR-1), DEPTH, RADIUS, centre(3), TOL
+       SXLYR, NS, IR, INFO, NP, NW, JLAt, jlon, lwork
+   REAL(KIND=QL) THK(NLYR-1), DEPTH, RADIUS, centre(3), TOL, DPTHL(NLYR)
    COMPLEX(KIND=QL) YHATL(0:NLYR), ZHATL(0:NLYR), YHATS, ZHATS, &
                     AI(-1:1,2*NTERMS,2*NTERMS), &
                     RTM(NTERMS), RTE(NTERMS), KR
@@ -462,7 +592,8 @@ use precision
    
    call SphericalGeometryInitialisation(centre,RADIUS,nlat,nlon,ps) 
    
-   CALL MTSphere_MultipleSources(NW,NTERMS,NLAT,NLON,depth,depth,NLYR,THK,RADIUS,YHATL,ZHATL,RTM,RTE,E,H) 
+   CALL MTSphere_MultipleSources(NW,NTERMS,NLAT,NLON,depth,depth,NLYR,THK,&
+       DPTHL,RADIUS,YHATL,ZHATL,RTM,RTE,E,H) 
    
    WRITE(NW,'(/''Spherical Harmonic Analysis'')') 
 
@@ -477,7 +608,8 @@ use precision
             do n = 1, NTERMS
                 iCR = icr + 1
                 Call RadialFields(NLAT,NLON,PS,CENTRE,E(IC,n,m,:,:,:),H(IC,n,m,:,:,:),ER,HR)
-                Call MTSphericalHarmonicAnalysis(nterms,nlat,nlon,radius,YHATL(SLYR),zhatL(SLYR),er,hr,.FALSE.,psia,psif)
+                Call MTSphericalHarmonicAnalysis(nterms,nlat,nlon,radius,&
+                    YHATL(SXLYR),zhatL(SXLYR),er,hr,.FALSE.,psia,psif)
                 ihr = 0
                 do Ih = 1, 2
                    do np = 1, nterms
