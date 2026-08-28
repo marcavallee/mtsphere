@@ -4,6 +4,8 @@ import cmath
 import numpy as np
 import scipy.special as scispe
 import pyshtools as pysh
+from winerror import FWP_E_NEVER_MATCH
+
 
 def gauss_legendre(n):
     """
@@ -100,8 +102,10 @@ def Ynm(n, m, theta, phi):
 
 def ReflectionCoefficients(nterms, radius, yhat, zhat, yhats, zhats):
 
-    RTM = np.zeros(nterms+1,dtype=complex)
-    RTE = np.zeros(nterms+1,dtype=complex)
+    rtm = np.zeros(nterms+1,dtype=complex)
+    rte = np.zeros(nterms+1,dtype=complex)
+    ttm = np.zeros(nterms+1,dtype=complex)
+    tte = np.zeros(nterms+1,dtype=complex)
 
     k = np.sqrt(- yhat * zhat)
     ks = np.sqrt(- yhats * zhats)
@@ -127,10 +131,22 @@ def ReflectionCoefficients(nterms, radius, yhat, zhat, yhats, zhats):
 
         RTMW = ( yhat * dajksajksa - yhats * dajkajka ) / ( yhat * dajksajksa - yhats * dahkahka )
         RTEW = ( zhat * dajksajksa - zhats * dajkajka ) / ( zhat * dajksajksa - zhats * dahkahka )
-        RTM[n] = - RTMW * jka / hka
-        RTE[n] = - RTEW * jka / hka
+        rtm[n] = - RTMW * jka / hka
+        rte[n] = - RTEW * jka / hka
 
-    return RTM, RTE
+        A = yhats * jka * (hka + ka * dhka)
+        B = yhats * hka * (jka + ka * djka)
+        C = yhats * jksa * (hka + ka * dhka)
+        D = yhat * hka * (jksa + ksa * djksa)
+        ttm[n] = (A - B) / (C - D)
+
+        A = zhats * jka * (hka + ka * dhka)
+        B = zhats * hka * (jka + ka * djka)
+        C = zhats * jksa * (hka + ka * dhka)
+        D = zhat * hka * (jksa + ksa * djksa)
+        tte[n] = (A - B) / (C - D)
+
+    return rtm, rte, ttm, tte
 
 def RadialFields(nlat, nlon, ps, center, E, H):
 
@@ -255,3 +271,86 @@ def MTSphericalAnalysis(nterms, nlat, nlon, f):
             psi[n, m] = integral
 
     return psi
+
+def MTFieldSphericalCoefficients(nterms, psia, psif, yhat, zhat):
+
+    # Computation of the spherical field coefficients from the potential spherical coefficients
+    
+    #          Input
+    #          -----
+    # nterms: number of degrees
+    # psia: transverse magnetic spherical potential
+    # psif: transverse electric spherical potential
+    # yhat: admittivity
+    # zhat: impedivity
+    
+    #          Output
+    #          -----
+    # Enm: electric field spherical coefficients
+    # Hnm: magnetic field spherical coefficients
+
+    A, B, C = SphericalFactorInitialisation(nterms + 2)
+    k = np.sqrt(- yhat * zhat)
+
+    def ComputeField(phi, psi, phat, signe):
+    
+        Fnm = np.zeros((3, nterms + 2, 5),dtype=complex)
+
+        for n in range(nterms+2):
+            for m in range(-2, 3):
+                txpiy = 0.0
+                txmiy = 0.0
+                tz = 0.0
+                if n > 0 and n <= nterms and m > - 1:
+                    txpiy += 1j * C[n, m - 1] * phi[n, m - 1] * signe
+                if n > 0 and n <= nterms and m < 1:
+                    txmiy += 1j * C[n, m] * phi[n, m + 1] * signe
+                if n > 0 and n <= nterms and abs(m) < 2:
+                    tz -= 1j * m * phi[n, m] * signe
+                if n < nterms and m > -1:
+                    txpiy -= k * (n + 2) * B[n + 1, m - 1] * psi[n + 1, m - 1] / phat
+                if n > 1 and m > -1:
+                    txpiy -= k * (n - 1) * B[n, -m] * psi[n - 1, m - 1] / phat
+                if n < nterms and m < 1:
+                    txmiy -= k * (n + 2) * B[n + 1, -m - 1] * psi[n + 1, m + 1] / phat
+                if n > 1 and m < 1:
+                    txmiy -= k * (n - 1) * B[n, m] * psi[n - 1, m + 1] / phat
+                if n < nterms and abs(m) < 2:
+                    tz += k * (n + 2) * A[n, m] * psi[n + 1, m] / phat
+                if n > 1 and abs(m) < 2:
+                    tz += k * (n - 1) * A[n - 1, m] * psi[n - 1, m] / phat
+                Fnm[0, n, m] = 0.5 * (txpiy + txmiy)
+                Fnm[1, n, m] = - 1j * 0.5 * (txpiy - txmiy)
+                Fnm[2, n, m] = tz
+        return Fnm
+
+    Enm = ComputeField(psif, psia, yhat, -1)
+    Hnm = ComputeField(psia, psif, zhat, 1)
+
+    return Enm, Hnm
+
+def MTFieldsFromSphericalCoefficients(Enm, Hnm, nterms, k, r, theta, phi, singular):
+
+    E = np.zeros(3, dtype=complex)
+    H = np.zeros(3, dtype=complex)
+    kr = k * r
+    for n in range(nterms + 2):
+        if singular:
+            jkr = scispe.spherical_jn(n, kr)
+            ykr = scispe.spherical_yn(n, kr)
+            sr = jkr - 1j * ykr
+        else:
+            sr = scispe.spherical_jn(n, kr)
+        if n < 3:
+            mm = n
+        else:
+            mm = 2
+        for m in range(-mm, mm + 1):
+            Ynmlocal = Ynm(n, m, theta, phi)
+            for i in range(3):
+                E[i] += Enm[i, n, m] * sr * Ynmlocal
+                H[i] += Hnm[i, n, m] * sr * Ynmlocal
+
+    return E, H
+
+

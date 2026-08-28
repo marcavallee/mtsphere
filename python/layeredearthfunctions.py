@@ -11,69 +11,70 @@ def PlaneWaveImpedance(nw, nlyr, thk, res, nf, freq):
     # res has nlyr members, representing the resistivity below the surface.
     # thk has nlyr-1 components.
 
+    k = np.zeros((nf, nlyr + 1), dtype=complex)
+    Z = np.zeros( (nf, nlyr+1), dtype=complex)
     E = np.zeros((nf,nlyr+1,2),dtype=complex)
-    Zhat = np.zeros((nf,nlyr+1),dtype=complex)
     for jf in range(nf):
         w = 2 * np.pi * freq[jf]
-        k = np.zeros(nlyr+1, dtype=complex)
-        Z = np.zeros(nlyr+1, dtype=complex)
         for jl in range(nlyr+1):
             if jl == 0:
-                k[0] = w * np.sqrt( mu_0 * epsilon_0)
+                k[jf,0] = w * np.sqrt( mu_0 * epsilon_0)
             else:
-                k[jl] = np.sqrt(-1j * mu_0 * w/res[jl])
-            Z[jl] = w * mu_0 / k[jl]
-        Zhat[jf, nlyr] = Z[nlyr]
+                k[jf,jl] = np.sqrt(-1j * mu_0 * w/res[jl])
+            Z[jf,jl] = w * mu_0 / k[jf,jl]
+        Zhat = np.zeros(nlyr+1,dtype=complex)
+        Zhat[nlyr] = Z[jf,nlyr]
         for jl in range(nlyr-1,0,-1):
-            A = Zhat[jf,jl+1] + Z[jl] * np.tanh(1j * k[jl] * thk[jl])
-            B = Z[jl] + Zhat[jf,jl+1] * np.tanh(1j * k[jl] * thk[jl])
-            Zhat[jf, jl] = Z[jl] * A / B
+            A = Zhat[jl+1] + Z[jf,jl] * np.tanh(1j * k[jf,jl] * thk[jl])
+            B = Z[jf,jl] + Zhat[jl+1] * np.tanh(1j * k[jf,jl] * thk[jl])
+            Zhat[jl] = Z[jf,jl] * A / B
         for jl in range(nlyr+1):
             if jl == 0:
                 E[jf,jl,0] = 1 + 0j
-                E[jf,jl,1] = ( Zhat[jf,1] - Z[0] ) / ( Zhat[jf,1] + Z[0] )
+                E[jf,jl,1] = ( Zhat[1] - Z[jf,0] ) / ( Zhat[1] + Z[jf,0] )
             else:
                 if jl == 1:
                     Ei = E[jf,0,0] + E[jf,0,1]
                 else:
-                    Ei = E[jf,jl-1,0] * np.exp(-1j * k[jl-1] * thk[jl-1]) + \
-                         E[jf,jl-1,1] * np.exp( 1j * k[jl-1] * thk[jl-1])
+                    Ei = E[jf,jl-1,0] * np.exp(-1j * k[jf,jl-1] * thk[jl-1]) + \
+                         E[jf,jl-1,1] * np.exp( 1j * k[jf,jl-1] * thk[jl-1])
                 if jl == nlyr:
                     E[jf,jl,0] = Ei
                     E[jf,jl,1] = 0.
                 else:
-                    den = ( Zhat[jf,jl+1] - Z[jl] ) * np.exp( - 2j * k[jl] * thk[jl] ) + \
-                          ( Zhat[jf,jl+1] + Z[jl] )
-                    E[jf, jl, 0] = ( Zhat[jf,jl+1] + Z[jl] ) * Ei / den
-                    E[jf, jl, 1] = ( Zhat[jf,jl+1] - Z[jl] ) * np.exp( - 2j * k[jl] * thk[jl] ) * Ei / den
+                    den = ( Zhat[jl+1] - Z[jf,jl] ) * np.exp( - 2j * k[jf,jl] * thk[jl] ) + \
+                          ( Zhat[jl+1] + Z[jf,jl] )
+                    E[jf, jl, 0] = ( Zhat[jl+1] + Z[jf,jl] ) * Ei / den
+                    E[jf, jl, 1] = ( Zhat[jl+1] - Z[jf,jl] ) * np.exp( - 2j * k[jf,jl] * thk[jl] ) * Ei / den
 
     nw.write('\n Layer impedance\n')
     for jf in range(nf):
-        for jl in range(1,nlyr+1):
+        for jl in range(0,nlyr+1):
             nw.write(' Frequency: {:15.7g}, Layer: {:5}, Impedance: {:15.7g} {:15.7g}\n'. \
-                format(freq[jf],jl,Zhat[jf,jl].real,Zhat[jf,jl].imag))
+                format(freq[jf],jl,Z[jf,jl].real,Z[jf,jl].imag))
 
     nw.write('\n Propagation coefficients\n')
     for jf in range(nf):
         for jl in range(nlyr+1):
-            nw.write(' Frequency:, {:15.7g}, Layer: {:5}, Earthward propagation: {:15.7g} {:15.7g}, Sunward propagation: {:15.7g} {:15.7g}\n'. \
+            nw.write(' Frequency: {:15.7g}, Layer: {:5}, Earthward propagation: {:15.7g} {:15.7g}, Sunward propagation: {:15.7g} {:15.7g}\n'. \
             format(freq[jf],jl,E[jf,jl,0].real,E[jf,jl,0].imag, E[jf,jl,1].real, E[jf,jl,1].imag ) )
 
-    return Zhat, E
+    return k, Z, E
 
-def apparentresistivity(nf, nx, ny, freq, imp):
+def apparentresistivity(nf, nx, ny, nd, freq, imp):
 
-    appres = np.zeros((nf,nx,ny,2,2))
-    phase = np.zeros((nf,nx,ny,2,2))
+    appres = np.zeros((nf,nx,ny,nd,2,2))
+    phase = np.zeros((nf,nx,ny,nd,2,2))
     
     for jf in range(nf):
         den = 2 * np.pi * freq[jf] * mu_0
         for jx in range(nx):
             for jy in range(ny):
-                for i in range(2):
-                    for j in range(2):
-                        appres[jf,jx,jy,i,j] = abs ( imp[jf,jx,jy,i,j] ** 2 ) / den
-                        phase[jf,jx,jy,i,j] = np.angle( imp[jf,jx,jy,i,j] ) * 180 / np.pi
+                for jd in range(nd):
+                    for i in range(2):
+                        for j in range(2):
+                            appres[jf,jx,jy,jd,i,j] = abs ( imp[jf,jx,jy,jd,i,j] ** 2 ) / den
+                            phase[jf,jx,jy,jd,i,j] = np.angle( imp[jf,jx,jy,jd,i,j] ) * 180 / np.pi
 
     return appres, phase
 
@@ -306,28 +307,28 @@ class CylindricalDerivatives:
     def __init__(self,n,lmbda):
 
         self.n = n
-        dxpiy = np.zeros((2*(n+1)+1,2*n+1))
-        dxmiy = np.zeros((2*(n+1)+1,2*n+1))
+        dxpiy = np.zeros((2*(n+1)+1,2*n+1), dtype=complex)
+        dxmiy = np.zeros((2*(n+1)+1,2*n+1), dtype=complex)
 
         for m in range(-n,n+1):
             if m == 0:
-                dxpiy[ 1,0]  = -1
-                dxmiy[-1,0]  = -1
+                dxpiy[ 1,0]  = -1.0
+                dxmiy[-1,0]  = -1.0
             elif m < 0:
                 mp = m + 1
-                dxpiy[mp,m] = 1
+                dxpiy[mp,m] = 1.0
                 mp = m - 1
-                dxmiy[mp,m] = -1
+                dxmiy[mp,m] = -1.0
             elif m > 0:
                 mp = m + 1
-                dxpiy[mp,m] = -1
+                dxpiy[mp,m] = -1.0
                 mp = m - 1
-                dxmiy[mp,m] =  1
+                dxmiy[mp,m] =  1.0
 
-        dxpiy = dxpiy * lmbda
-        dxmiy = dxmiy * lmbda
         self.dx =   0.5  * ( dxpiy + dxmiy )
         self.dy = - 0.5j * ( dxpiy - dxmiy )
+        self.dx *= lmbda
+        self.dy *= lmbda
 
     def derivate(self,ider,F):
 
