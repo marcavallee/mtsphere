@@ -6,12 +6,13 @@ The input file is named MTSphereMT.cfl. It is an ASCII file with the following l
 
 1. Comment line.
 
-2. NLYR, NTERMS, NX, NY, where
+2. NLYR, NTERMS, NX, NY, ND, where
 	a) NLYR : Layer number
 	b) NTERMS : Number of spherical harmonics computed ( 6 recommended )
 	c) NX : number of stations along the X direction
 	d) NY : number of stations along the Y direction
-	If NX and NY are both positive, station locations are interpolated from XMIN and XMAX and YMIN and YMAX. Otherwise, if either NX or NY is negative, the user
+	e) ND : number of stations along depth direction
+	If NX, NY, and ND are both positive, station locations are interpolated from XMIN and XMAX, YMIN and YMAX, and DMIN to DMAX. Otherwise, if either NX, NY, or ND is negative, the user
 	must provide the station locations.
 
 3. NF, MINFREQ, MAXFREQ, LOGARITHMIC, where
@@ -29,17 +30,21 @@ The input file is named MTSphereMT.cfl. It is an ASCII file with the following l
 
 6. one line with RES(NLYR) : bottom half-space resistivity
 
-If NX or NY is negative:
+If NX, NY, or ND is negative:
 
 7. X(1) ... X(NX) : X coordinates of the MT stations
 
 8. Y(1) ... Y(NY) : Y coordinates of the MT stations
+
+9. D(1) ... D(ND) : Depth coordinates of the MT stations
 
 Otherwise:
 
 7. XMIN XMAX
 
 8. YMIN YMAX
+
+9. DMIN DMAX
 
 Results are output as ASCII files.
 
@@ -51,6 +56,6 @@ MTSphere was compiled with Classic Intel Compiler 2021.7.1. imbedded in Visual S
 
 3) With g fortran, the compilation is simply done by typing Make -f makefile.
 
-July 2025.
+September 2026.
 
 
