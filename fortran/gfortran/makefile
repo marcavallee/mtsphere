@@ -1,4 +1,4 @@
-srcdir = ../source
+srcdir = ../src
 
 all: exec/MTSphere.exe
 
