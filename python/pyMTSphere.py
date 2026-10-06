@@ -72,8 +72,8 @@ class pyMTSphere:
         self.mf1file = None
         self.mf2file = None
         self.pxyd = np.array([])
-        self.version = '2.2.0'
-        self.releasedate = 'September 2026'
+        self.version = '2.2.1'
+        self.releasedate = 'October 2026'
         self.htarg = {'dlf':'key_401_2009'}
         self.mtplot = MTPlot(self)
         self.nterms = 6
