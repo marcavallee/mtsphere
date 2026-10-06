@@ -1,4 +1,4 @@
-!  PROGRAM MTSPHERE Version 2.2.0 September 2026
+!  PROGRAM MTSPHERE Version 2.2.1 October 2026
 !    
 !    
 !        Developed by: Marc A. Vallée
@@ -57,7 +57,7 @@ IMPLICIT NONE
     CHARACTER(LEN=60) PVC
     CHARACTER(LEN=120) INP,TITLE
     DATA MONTH /'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'/
-    DATA PVC /'MTSphere - Version 2.2.0 - September 2026'/
+    DATA PVC /'MTSphere - Version 2.2.1 - October 2026'/
     REAL(KIND=QL), ALLOCATABLE :: X(:), Y(:), D(:), PXYD(:,:,:,:), APPRES(:,:,:,:,:,:), PHASE(:,:,:,:,:,:), DPTHL(:)
     COMPLEX(KIND=QL), ALLOCATABLE :: K(:,:), Z(:,:), E(:,:,:),IMP(:,:,:,:,:,:), &
                     ES(:,:,:,:,:,:),HS(:,:,:,:,:,:),ET(:,:,:,:,:,:),HT(:,:,:,:,:,:), &
