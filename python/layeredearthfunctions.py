@@ -185,15 +185,22 @@ def HSSphere_Ker(lmbda,sxlyr,nlyr,thk,dpthl,zs,yhat,zhat):
         admhat[1] = - adm[0]
         imphat[1] = - imp[0]
         for j in range(1,sxlyr):
-            Ei = s[j] * thk[j]
-            if abs(Ei) < 100:
-                Ej = np.tanh ( Ei )
+            valeur = np.clip(s[j]*thk[j], -600, 600)
+            if np.iscomplexobj(valeur):
+                # Si c'est un complexe, on limite strictement sa partie réelle entre -350 et 350
+                partie_reelle = np.clip(np.real(valeur), -350, 350)
+                partie_imaginaire = np.imag(valeur)
+                argument_tanh = partie_reelle + 1j * partie_imaginaire
             else:
-                Ej = 0.
-            admhat[j+1] = adm[j] * ( admhat[j] - adm[j] * Ej ) / \
-                                   ( adm[j] - admhat[j] * Ej )
-            imphat[j+1] = imp[j] * ( imphat[j] - imp[j] * Ej ) / \
-                                   ( imp[j] - imphat[j] * Ej )
+                # Si c'est un réel pur, on le limite entre -700 and 700
+                argument_tanh = np.clip(valeur, -700, 700)
+
+                Ep = np.tanh(argument_tanh)
+            Ep = np.tanh ( argument_tanh )
+            admhat[j+1] = adm[j] * ( admhat[j] - adm[j] * Ep ) / \
+                                   ( adm[j] - admhat[j] * Ep )
+            imphat[j+1] = imp[j] * ( imphat[j] - imp[j] * Ep ) / \
+                                   ( imp[j] - imphat[j] * Ep )
 
 
     if sxlyr == 0:
@@ -239,7 +246,7 @@ def HSSphere_Ker(lmbda,sxlyr,nlyr,thk,dpthl,zs,yhat,zhat):
         Fn[0,0,sxlyr] =   ( admhat[sxlyr] + adm[sxlyr] ) * ( admhat[sxlyr+1] - adm[sxlyr] ) * Emh * Es2 / Fden
         Fn[0,1,sxlyr] = - ( admhat[sxlyr] + adm[sxlyr] ) * ( admhat[sxlyr+1] + adm[sxlyr] ) * Es1 / Fden
         An[0,0,sxlyr] =   ( imphat[sxlyr] + imp[sxlyr] ) * ( imphat[sxlyr+1] - imp[sxlyr] ) * Emh * Es2 / Aden
-        An[0,0,sxlyr] = - ( imphat[sxlyr] + imp[sxlyr] ) * ( imphat[sxlyr+1] + imp[sxlyr] ) * Es1  / Aden
+        An[0,1,sxlyr] = - ( imphat[sxlyr] + imp[sxlyr] ) * ( imphat[sxlyr+1] + imp[sxlyr] ) * Es1  / Aden
         Fn[1,0,sxlyr] = - ( admhat[sxlyr+1] - adm[sxlyr] ) * ( admhat[sxlyr] - adm[sxlyr] ) * Emh * Es2 / Fden
         Fn[1,1,sxlyr] =   ( admhat[sxlyr+1] - adm[sxlyr] ) * ( admhat[sxlyr] + adm[sxlyr] ) * E2h * Es1 / Fden
         An[1,0,sxlyr] = - ( imphat[sxlyr+1] - imp[sxlyr] ) * ( imphat[sxlyr] - imp[sxlyr] ) * Emh * Es2  / Aden

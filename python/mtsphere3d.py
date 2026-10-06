@@ -171,7 +171,7 @@ def getimpedance(nf, nx, ny, nd, nlyr, nterms, pxyd, dpthl, K, Z, depth, radius,
                     if r > radius:
                         if rxlyr == nlyr:
                             EE = E[jf,nlyr,0] * np.exp ( - 1j * K[jf,rxlyr] * ( dr - dpthl[rxlyr] ) )
-                            HH = E[jf,nlyr,0] / Z[jf,rxlyr]
+                            HH = EE / Z[jf,rxlyr]
                         elif rxlyr == 0:
                             EE = E[jf,0,0] * np.exp ( - 1j * K[jf,rxlyr] * dr ) \
                                + E[jf,0,1] * np.exp (   1j * K[jf,rxlyr] * dr )

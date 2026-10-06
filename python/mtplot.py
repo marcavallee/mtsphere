@@ -8,8 +8,6 @@ matplotlib.use('tkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2Tk
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-from cartesian_to_spherical_components import cartesian_to_spherical_components
-from valider_projections_sphériques import valider_plan_horizontal_z0
 
 class MTPlot:
 
@@ -392,6 +390,8 @@ class MTPlot:
                 for jf in range(self.main.nf):
                     columns = [ float(f) for f in mf1file.readline().split() ]
                     freq[jf] = columns[0]
+                    x = columns[1]
+                    y = columns[2]
                     appres[jf,i,j] = columns[4]
                     phase[jf,i,j] = columns[5]
                     imp[jf,i,j] = columns[6] + 1j * columns[7]
@@ -402,46 +402,58 @@ class MTPlot:
             Kzx[jf] = columns[4] + 1j * columns[5]
             Kzy[jf] = columns[6] + 1j * columns[7]
         mf1file.close()
-        figure = Figure([8, 8])
-        axes = []
-        for i in range(4):
-            axes.append(figure.add_subplot(4,1,i+1))
-    #        axe1s.append(figure1.add_subplot(212))
+        if abs(x) > 0 and abs(y) > 0:
+            diagonal = True
+        else:
+            diagonal = False
+        figure, axes = plt.subplots(4,1,figsize=(8,8))
         axes[0].plot(freq,appres[:,0,1],'b',label='XY')
         axes[0].plot(freq,appres[:,1,0],'r',label='YX')
+        axes[0].set_ylabel('Apparent resistivity ($\Omega$.m)')
+        axes[0].legend(loc='upper right')
+        axes[0].set_xscale('log')
+        axes[0].set_xlim(min(freq),max(freq))
         axes[1].plot(freq,phase[:,0,1],'b',label='XY')
         axes[1].plot(freq,phase[:,1,0]+180,'r',label='YX+180')
         axes[1].set_xlabel('Frequency (Hz)')
-        axes[0].set_ylabel('Apparent resistivity ($\Omega$.m)')
         axes[1].set_ylabel('Phase ($^\circ$)')
-        axes[0].legend(loc='upper right')
         axes[1].legend(loc='upper right')
-        axes[0].set_xscale('log')
-        axes[0].set_xlim(min(freq),max(freq))
         axes[1].set_xscale('log')
         axes[1].set_xlim(min(freq),max(freq))
+        if diagonal:
+            axes[2].plot(freq, appres[:, 0, 0], 'b', label='XX')
+            axes[2].plot(freq, appres[:, 1, 1], 'r', label='YY')
+            axes[2].set_ylabel('Apparent resistivity ($\Omega$.m)')
+            axes[2].legend(loc='upper right')
+            axes[2].set_xscale('log')
+            axes[2].set_xlim(min(freq),max(freq))
+            axes[3].plot(freq, phase[:, 0, 0], 'b', label='XX')
+            axes[3].plot(freq, phase[:, 1, 1] + 180, 'r', label='YY+180')
+            axes[3].set_xlabel('Frequency (Hz)')
+            axes[3].set_ylabel('Phase ($^\circ$)')
+            axes[3].legend(loc='upper right')
+            axes[3].set_xscale('log')
+            axes[3].set_xlim(min(freq),max(freq))
+        else:
+            axes[2].plot(freq,100*Kzx.real,'b',label='Real')
+            axes[2].plot(freq,100*Kzx.imag,'r',label='Imaginary')
+            axes[2].set_xlabel('Frequency (Hz)')
+            axes[2].set_ylabel('X Tipper ratio (%)')
+            axes[2].legend(loc='upper right')
+            axes[2].set_xscale('log')
+            axes[2].set_xlim(min(freq),max(freq))
+            ylim = max(np.max(100*np.abs(Kzx)),1)
+            axes[2].set_ylim(-ylim,ylim)
 
-#        figure2 = Figure([8, 6])
-#        axe = figure2.add_subplot(111)
-        axes[2].plot(freq,100*Kzx.real,'b',label='Real')
-        axes[2].plot(freq,100*Kzx.imag,'r',label='Imaginary')
-        axes[2].set_xlabel('Frequency (Hz)')
-        axes[2].set_ylabel('X Tipper ratio (%)')
-        axes[2].legend(loc='upper right')
-        axes[2].set_xscale('log')
-        axes[2].set_xlim(min(freq),max(freq))
-
-#        figure3 = Figure([8, 6])
-#        axe = figure3.add_subplot(111)
-        axes[3].plot(freq,100*Kzy.real,'b',label='Real')
-        axes[3].plot(freq,100*Kzy.imag,'r',label='Imaginary')
-#        figure3.suptitle('Tipper Sounding')
-        axes[3].set_xlabel('Frequency (Hz)')
-        axes[3].set_ylabel('Y Tipper ratio (%)')
-        axes[3].legend(loc='upper right')
-        axes[3].set_ylim(-1,1)
-        axes[3].set_xscale('log')
-        axes[3].set_xlim(min(freq),max(freq))
+            axes[3].plot(freq,100*Kzy.real,'b',label='Real')
+            axes[3].plot(freq,100*Kzy.imag,'r',label='Imaginary')
+            axes[3].set_xlabel('Frequency (Hz)')
+            axes[3].set_ylabel('Y Tipper ratio (%)')
+            axes[3].legend(loc='upper right')
+            ylim = max(np.max(100*np.abs(Kzy)),1)
+            axes[3].set_ylim(-ylim,ylim)
+            axes[3].set_xscale('log')
+            axes[3].set_xlim(min(freq),max(freq))
 
         master = tk.Toplevel()
         canvasplot = FigureCanvasTkAgg(figure, master=master)
@@ -503,7 +515,7 @@ class MTPlot:
                     elif profile == 'Z':
                         pu[ju] = columns[3]
                     appres[ju,i,j] = columns[4]
-                    phase[ju,i,j] = columns[5]
+                    phase[ju,i,j] = columns[5] % 360
                     imp[ju,i,j] = columns[6] + 1j * columns[7]
         for k in range(3):
             mf1file.readline()
@@ -512,18 +524,25 @@ class MTPlot:
             Kzx[ju] = columns[4] + 1j * columns[5]
             Kzy[ju] = columns[6] + 1j * columns[7]
         mf1file.close()
-        figure = Figure([8, 8])
-        axes = []
-        for i in range(4):
-            axes.append(figure.add_subplot(4,1,i+1))
+        figure, axes = plt.subplots(4,1,figsize=(8,8))
         axes[0].plot(pu,appres[:,0,1],'b',label='XY')
         axes[0].plot(pu,appres[:,1,0],'r',label='YX')
         axes[0].set_ylabel('Apparent resistivity ($\Omega$.m)')
-        axes[0].legend(loc='upper right')
+        axes[0].legend(loc='upper left')
+        ax2 = axes[0].twinx()
+        ax2.plot(pu,appres[:,0,0],'b-+',label='XX')
+        ax2.plot(pu,appres[:,1,1],'r-+',label='YY')
+        ax2.set_ylabel('Apparent resistivity ($\Omega$.m)')
+        ax2.legend(loc='upper right')
         axes[1].plot(pu,phase[:,0,1],'b',label='XY')
-        axes[1].plot(pu,phase[:,1,0]+180,'r',label='YX+180')
+        axes[1].plot(pu,(phase[:,1,0]+180) % 360,'r',label='YX+180')
         axes[1].set_ylabel('Phase ($^\circ$)')
-        axes[1].legend(loc='upper right')
+        axes[1].legend(loc='upper left')
+        ax2 = axes[1].twinx()
+        ax2.plot(pu,phase[:,0,0],'b-+',label='XX')
+        ax2.plot(pu,(phase[:,1,1]+180) % 360,'r-+',label='YY+180')
+        ax2.set_ylabel('Phase ($^\circ$)')
+        ax2.legend(loc='upper right')
         axes[2].plot(pu,100*Kzx.real,'b',label='Real')
         axes[2].plot(pu,100*Kzx.imag,'r',label='Imaginary')
         axes[2].set_ylabel('X Tipper ratio (%)')
