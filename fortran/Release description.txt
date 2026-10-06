@@ -1,8 +1,0 @@
-Release 2.2.0, September 2026: Various corrections suggested by users, particularly in the Python version.
-
-Release 2.1.1, August 2026: Add option for precising receiver locations.
-
-Release 2.1.0, July 2026: Distinguish sphere upward and downward propagation while computing layered earth potentials.
-
-Release 2.0.1, April 2026: Original code released on GitHub.
-
