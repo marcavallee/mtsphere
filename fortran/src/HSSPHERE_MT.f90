@@ -383,7 +383,7 @@ USE FILT_COEF_Q
  COMPLEX(KIND=QL) E(NX,NY,ND,3), H(NX,NY,ND,3), K, YHATS, ZHATS, &
                   YHAT(0:NLYR), zhat(0:NLYR), EMPHI, &
                   PSIA(NTERMS,-1:1), PSIF(NTERMS,-1:1), &
-                  PSIAT(NTERMS,-1:1), PSIFT(NTERMS,-1,1), EH(-2:2,3), HH(-2:2,3), &
+                  PSIAT(NTERMS,-1:1), PSIFT(NTERMS,-1:1), EH(-2:2,3), HH(-2:2,3), &
                   ENM(3,0:NTERMS+1,-2:2), HNM(3,0:NTERMS+1,-2:2)
 LOGICAL SINGULAR
                   

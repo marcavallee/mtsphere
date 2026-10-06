@@ -16,12 +16,8 @@
 !          -----
 ! ZHAT: surface impedances
 ! E : electric field coefficients
-    
+    use PRECISION
     IMPLICIT NONE
-    INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
-    REAL(KIND=QL), PARAMETER :: MU0=12.56637D-7,EPS0=8.854156D-12
-    REAL(KIND=QL), PARAMETER :: PI = 3.141592653589793    
-    COMPLEX(KIND=QL), PARAMETER :: CI = CMPLX (0.D0, 1.D0, KIND=QL)
     INTEGER JL,NLYR,JF,NF,NW
     REAL FREQ(NF),THK(NLYR-1),RES(NLYR), W
     COMPLEX(KIND=QL) K(NF,0:NLYR),Z(NF,0:NLYR),ZHAT(NLYR),EI,E(NF,0:NLYR,2),A,B,DEN
@@ -102,10 +98,8 @@ SUBROUTINE APPARENTRESISTIVITY(NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE)
 ! APPRES: Apparent resistivity
 ! PHASE: phase
 
+use PRECISION
 IMPLICIT NONE
-    INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
-    REAL(KIND=QL), PARAMETER :: MU0=12.56637D-7
-    REAL(KIND=QL), PARAMETER :: PI = 3.141592653589793    
     INTEGER NF, NX, NY, ND, JF, JX, JY, JD, I, J
     REAL FREQ(NF)
     REAL(KIND=QL) APPRES(NF,NX,NY,ND,2,2), PHASE(NF,NX,NY,ND,2,2), DEN
@@ -251,11 +245,13 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
 ! ET: total electric field
 ! HT: total magnetic field
 
-    USE PRECISION
+    USE precision
+    
+    implicit none
 
     INTEGER NW, NF, NLYR, JF, JX, JY, JZ, SXLYR, N, M, NP, MP, NTERMS, NX, NY, ND, JD, I, TP, IP
     REAL THK(NLYR-1), RES(NLYR), DEPTH, FREQ(NF), SRES, RADIUS
-    REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,W, RADIUSD, PXYD(NX,NY,ND,3), R
+    REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,W, RADIUSD, PXYD(NX,NY,ND,3), R, DEPTHD
     COMPLEX(KIND=QL) E(NF,0:NLYR,2),EL(2),YHATL(0:NLYR),ZHATL(0:NLYR),YHATS,ZHATS, &
                      PSIAI(2,NTERMS,-1:1), & 
                      PSIFI(2,NTERMS,-1:1), &
@@ -361,7 +357,7 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
 
     subroutine dynamiccleaning(F)
     
-    integer jx, jy, jd
+    integer jx, jy, jd, ic
     real(kind=QL) max_local, ceiling_local
     complex(kind=QL) F(NX,NY,ND,3), T(3)
     
@@ -371,11 +367,15 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
                 T = f(jx,jy,jd,:)   
                 max_local = MAX(ABS(real(t(1))),ABS(AIMAG(t(1))), &
                                 ABS(real(t(2))),ABS(AIMAG(t(2))), &
-                                ABS(real(t(2))),ABS(AIMAG(t(3))))
+                                ABS(real(t(3))),ABS(AIMAG(t(3))))
                 ceiling_local = max_local * 1.D-12
                 do IC = 1,3
-                    if ( ABS(real(T(IC))) < ceiling_local) T(IC) = CMPLX(0._QL, AIMAG(T(IC)))
-                    if ( ABS(aimag(T(IC))) < ceiling_local) T(IC) = CMPLX(real(T(IC)),0._QL)
+                    if ( ABS(real(T(IC))) < ceiling_local) THEN
+                        T(IC) = CMPLX(0._QL, AIMAG(T(IC)), KIND=QL)
+                    end IF
+                    if ( ABS(aimag(T(IC))) < ceiling_local) THEN
+                        T(IC) = CMPLX(real(T(IC)),0._QL, KIND=QL)
+                    end IF
                 end do
                 f(Jx,jy,jd,:) = T
             end do
@@ -439,7 +439,7 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
                         if ( R > RADIUS ) THEN
                             if ( rXLYR == NLYR ) then
                                 EE = E(JF,NLYR,1) * EXP ( - CI * K(JF,RXLYR) * ( DR - DPTHL(RXLYR) ) )
-                                HH = E(JF,NLYR,1) / Z(JF,RXLYR)
+                                HH = EE / Z(JF,RXLYR)
                             else if ( RXLYR == 0 ) THEN
                                 EE = E(JF,0,1) * EXP ( - CI * K(JF,RXLYR) * DR ) &
                                    + E(JF,0,2) * EXP (   CI * K(JF,RXLYR) * DR )
@@ -634,7 +634,11 @@ use precision
             END DO
         END DO  
         CALL ZGETRF(2*NTERMS,2*NTERMS,A,2*NTERMS,IPIV,INFO)
-        CALL ZGETRI(2*NTERMS,A,2*NTERMS,IPIV,WORK,2*NTERMS,INFO)    
+        if ( INFO == 0 ) THEN
+            CALL ZGETRI(2*NTERMS,A,2*NTERMS,IPIV,WORK,2*NTERMS,INFO) 
+        else
+            A = (0._QL,0._QL)
+        end if
         AI(M,:,:) = A
         IF ( M < 0 ) THEN
             WRITE(NW,'(/''Sphere correction, negative order'')')

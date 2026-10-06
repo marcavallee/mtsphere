@@ -122,14 +122,18 @@ IMPLICIT NONE
     END DO
     READ(NR,*)RES(NLYR)
     WRITE(NW,*)'Layer ',NLYR,' : Resistivity:',RES(NLYR)
-    IF ( LOGARITHMIC == 0 ) THEN
-        DO I = 1, NF
-            FREQ(I) = MINFREQ + ( I - 1 ) * ( MAXFREQ - MINFREQ ) / ( NF - 1 )
-        END DO
-    ELSE
-        DO I = 1, NF
-            FREQ(I) = MINFREQ * ( MAXFREQ / MINFREQ ) ** ( FLOAT ( I - 1 ) / FLOAT ( NF - 1 ) )
-        END DO
+    if ( NF > 1 ) THEN
+        IF ( LOGARITHMIC == 0 ) THEN
+            DO I = 1, NF
+                FREQ(I) = MINFREQ + ( I - 1 ) * ( MAXFREQ - MINFREQ ) / ( NF - 1 )
+            END DO
+        else 
+            DO I = 1, NF
+                FREQ(I) = MINFREQ * ( MAXFREQ / MINFREQ ) ** ( FLOAT ( I - 1 ) / FLOAT ( NF - 1 ) )
+            END DO
+        end IF
+    else 
+        FREQ(NF) = MINFREQ
     END IF
     WRITE(NW,'('' Frequencies:'',100G15.7)')(FREQ(I),I=1,NF)
     
