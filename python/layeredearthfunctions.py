@@ -2,7 +2,7 @@
 import numpy as np
 from scipy.constants import mu_0,epsilon_0
 
-def PlaneWaveImpedance(nw, nlyr, thk, res, nf, freq):
+def PlaneWaveImpedance(write0, nlyr, thk, res, nf, freq):
 
     # Subroutine to compute the coefficients of a plane wave propagating
     # in a layered earth
@@ -47,17 +47,17 @@ def PlaneWaveImpedance(nw, nlyr, thk, res, nf, freq):
                     E[jf, jl, 0] = ( Zhat[jl+1] + Z[jf,jl] ) * Ei / den
                     E[jf, jl, 1] = ( Zhat[jl+1] - Z[jf,jl] ) * np.exp( - 2j * k[jf,jl] * thk[jl] ) * Ei / den
 
-    nw.write('\n Layer impedance\n')
+    write0('\n Layer impedance\n',1)
     for jf in range(nf):
         for jl in range(0,nlyr+1):
-            nw.write(' Frequency: {:15.7g}, Layer: {:5}, Impedance: {:15.7g} {:15.7g}\n'. \
-                format(freq[jf],jl,Z[jf,jl].real,Z[jf,jl].imag))
+            write0(' Frequency: {:15.7g}, Layer: {:5}, Impedance: {:15.7g} {:15.7g}\n'. \
+                format(freq[jf],jl,Z[jf,jl].real,Z[jf,jl].imag),1)
 
-    nw.write('\n Propagation coefficients\n')
+    write0('\n Propagation coefficients\n',1)
     for jf in range(nf):
         for jl in range(nlyr+1):
-            nw.write(' Frequency: {:15.7g}, Layer: {:5}, Earthward propagation: {:15.7g} {:15.7g}, Sunward propagation: {:15.7g} {:15.7g}\n'. \
-            format(freq[jf],jl,E[jf,jl,0].real,E[jf,jl,0].imag, E[jf,jl,1].real, E[jf,jl,1].imag ) )
+            write0(' Frequency: {:15.7g}, Layer: {:5}, Earthward propagation: {:15.7g} {:15.7g}, Sunward propagation: {:15.7g} {:15.7g}\n'. \
+            format(freq[jf],jl,E[jf,jl,0].real,E[jf,jl,0].imag, E[jf,jl,1].real, E[jf,jl,1].imag ),1 )
 
     return k, Z, E
 
@@ -202,9 +202,8 @@ def HSSphere_Ker(lmbda,sxlyr,nlyr,thk,dpthl,zs,yhat,zhat):
             imphat[j+1] = imp[j] * ( imphat[j] - imp[j] * Ep ) / \
                                    ( imp[j] - imphat[j] * Ep )
 
-
     if sxlyr == 0:
-        ep = s[0] * ( dpthl[0] - zp )
+        ep = s[0] * ( dpthl[0] - zs )
         if ep.real < EXP_TOL:
             Ej = np.exp ( - ep )
         else:
@@ -231,14 +230,12 @@ def HSSphere_Ker(lmbda,sxlyr,nlyr,thk,dpthl,zs,yhat,zhat):
             Emh = np.exp(-Ep/2)
             Eph = np.exp(Ep/2)
             E2h = np.exp(-Ep)
-            Es1 = np.exp( - s[sxlyr] * ( zs - dpthl[sxlyr] ) )
-            Es2 = np.exp( - s[sxlyr] * ( dpthl[sxlyr] - zs ) )
         else:
             Emh = 0
             Eph = 0
             E2h = 0
-            Es1 = 0
-            Es2 = 0
+        Es1 = np.exp( - s[sxlyr] * ( zs - dpthl[sxlyr] ) )
+        Es2 = np.exp( - s[sxlyr] * ( dpthl[sxlyr+1] - zs ) )
         Fden = ( admhat[sxlyr] - adm[sxlyr] ) * ( admhat[sxlyr+1] + adm[sxlyr] ) - \
                ( admhat[sxlyr] + adm[sxlyr] ) * ( admhat[sxlyr+1] - adm[sxlyr] ) * E2h
         Aden = ( imphat[sxlyr] - imp[sxlyr] ) * ( imphat[sxlyr+1] + imp[sxlyr] ) - \
@@ -360,4 +357,3 @@ class CylindricalDerivatives:
 
         return dF
 
- 

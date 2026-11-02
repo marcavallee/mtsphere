@@ -4,10 +4,8 @@ import numpy as np
 from scipy.constants import pi, mu_0, epsilon_0
 from layeredearthspherecorrection import MTLayeredEarthCorrection,MTSphereReflectionCorrection
 from layeredearthfunctions import PlaneWaveSphericalHarmonics
-import sphericalfunctions as sphfun
-import halfspacesphere as hssphere
-
-import numpy as np
+from sphericalfunctions import ReflectionCoefficients
+from halfspacesphere import MTSphere_SingleSource
 
 def dynamic_cleaning_vectorized(F):
     """Nettoie le bruit numérique sur une grille 3D de tenseurs complexes.
@@ -40,7 +38,7 @@ def dynamic_cleaning_vectorized(F):
     # 5. Reconstruction du tableau complexe d'origine
     F[:] = real_cleaned + 1j * imag_cleaned
 
-def mtsphere3d(nw, nf, nlyr, nterms, nx, ny, nd, freq, pxyd, thk, res, depth,
+def mtsphere3d(write0, nf, nlyr, nterms, nx, ny, nd, freq, pxyd, thk, res, depth,
                radius, sres, E, dpthl, htarg):
 
     zs = depth
@@ -53,7 +51,7 @@ def mtsphere3d(nw, nf, nlyr, nterms, nx, ny, nd, freq, pxyd, thk, res, depth,
     Es = np.zeros((nf, nx, ny, nd, 3, 2), dtype=complex)
     Hs = np.zeros((nf, nx, ny, nd, 3, 2), dtype=complex)
     for jf in range(nf):
-        nw.write('\nFrequency: {:15.7g}\n\n'.format(freq[jf]))
+        write0('\nFrequency: {:15.7g}\n\n'.format(freq[jf]),1)
         w = 2. * pi * freq[jf]
         yhatl = np.zeros(nlyr+1,dtype=complex)
         zhatl = np.zeros(nlyr+1,dtype=complex)
@@ -65,30 +63,30 @@ def mtsphere3d(nw, nf, nlyr, nterms, nx, ny, nd, freq, pxyd, thk, res, depth,
             zhatl[jz] = 1j * w * mu_0
         yhats = 1 / sres + 1j * w * epsilon_0
         zhats = 1j * w * mu_0
-        rtm, rte, ttm, tte = sphfun.ReflectionCoefficients(nterms, radius, yhatl[sxlyr], zhatl[sxlyr], yhats, zhats)
-        AI = MTLayeredEarthCorrection(nw, nterms, nlyr, thk, zs, radius, sxlyr, yhatl, \
+        rtm, rte, ttm, tte = ReflectionCoefficients(nterms, radius, yhatl[sxlyr], zhatl[sxlyr], yhats, zhats)
+        AI = MTLayeredEarthCorrection(write0, nterms, nlyr, thk, zs, radius, sxlyr, yhatl, \
                                     zhatl, yhats, zhats, rtm, rte, htarg)
-        nw.write('\n Reflection coefficients:\n')
+        write0('\n Reflection coefficients:\n',1)
         for n in range(1,nterms+1):
-            nw.write('{:5}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
-                format(n,rtm[n].real,rtm[n].imag,rte[n].real,rte[n].imag))
+            write0('{:5}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
+                format(n,rtm[n].real,rtm[n].imag,rte[n].real,rte[n].imag),1)
         psiai, psifi = PlaneWaveSphericalHarmonics(nterms, yhatl[sxlyr], zhatl[sxlyr], zs - dpthl[sxlyr], E[jf, sxlyr, :] )
         for id in range(2):
-            nw.write('\n Plane wave spherical harmonics:\n')
+            write0('\n Plane wave spherical harmonics:\n',1)
             if id == 0:
-                nw.write(' X directed propagation\n')
+                write0(' X directed propagation\n',1)
             else:
-                nw.write(' Y directed propagation\n')
+                write0(' Y directed propagation\n',1)
             for n in range(1,nterms+1):
                 for m in [-1,1]:
-                    nw.write('{:5}{:5}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
-                             format(n,m,psiai[id,n,m].real,psiai[id,n,m].imag,psifi[id,n,m].real,psifi[id,n,m].imag))
+                    write0('{:5}{:5}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.\
+                             format(n,m,psiai[id,n,m].real,psiai[id,n,m].imag,psifi[id,n,m].real,psifi[id,n,m].imag),1)
             psiac, psifc = MTSphereReflectionCorrection(nterms, AI, psiai[id,:,:], psifi[id,:,:])
-            nw.write('\nCorrected potentials\n')
+            write0('\n Corrected potentials\n',1)
             for n in range(1,nterms+1):
                 for m in [-1,1]:
-                    nw.write('{:5}{:5}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.format(n,m,\
-                        psiac[n,m].real,psiac[n,m].imag,psifc[n,m].real,psifc[n,m].imag))
+                    write0('{:5}{:5}{:15.7g}{:15.7g}{:15.7g}{:15.7g}\n'.format(n,m,\
+                        psiac[n,m].real,psiac[n,m].imag,psifc[n,m].real,psifc[n,m].imag),1)
             psiar = np.zeros((nterms+1,3),dtype=complex)
             psifr = np.zeros((nterms+1,3),dtype=complex)
             psiat = np.zeros((nterms + 1, 3), dtype=complex)
@@ -98,20 +96,20 @@ def mtsphere3d(nw, nf, nlyr, nterms, nx, ny, nd, freq, pxyd, thk, res, depth,
                 psifr[n,:] = rte[n] * psifc[n,:]
                 psiat[n,:] = ttm[n] * psiac[n,:]
                 psift[n,:] = tte[n] * psifc[n,:]
-            Es[jf,:,:,:,:,id], Hs[jf,:,:,:,:,id] = hssphere.MTSphere_SingleSource(nterms, psiar, psifr, psiat, psift,\
+            Es[jf,:,:,:,:,id], Hs[jf,:,:,:,:,id] = MTSphere_SingleSource(nterms, psiar, psifr, psiat, psift,\
                                     nx, ny, nd, pxyd, nlyr, thk, yhatl, zhatl, yhats, zhats, dpthl, zs, radius, htarg)
             dynamic_cleaning_vectorized(Es[jf,:,:,:,:,id])
             dynamic_cleaning_vectorized(Hs[jf,:,:,:,:,id])
-            nw.write('\nInduced fields\n')
+            write0('\nInduced fields\n',1)
             for jx in range(nx):
                 for jy in range(ny):
                     for jd in range(nd):
-                        nw.write('{:15.7g}{:5}{:5}{:5}'.format(freq[jf],jx+1,jy+1,jd+1))
+                        write0('{:15.7g}{:5}{:5}{:5}'.format(freq[jf],jx+1,jy+1,jd+1),1)
                         for ic in range(3):
-                            nw.write('{:15.7g}{:15.7g}'.format(Es[jf,jx,jy,jd,ic,id].real,Es[jf,jx,jy,jd,ic,id].imag))
+                            write0('{:15.7g}{:15.7g}'.format(Es[jf,jx,jy,jd,ic,id].real,Es[jf,jx,jy,jd,ic,id].imag),1)
                         for ic in range(3):
-                            nw.write('{:15.7g}{:15.7g}'.format(Hs[jf,jx,jy,jd,ic,id].real,Hs[jf,jx,jy,jd,ic,id].imag))
-                        nw.write('\n')
+                            write0('{:15.7g}{:15.7g}'.format(Hs[jf,jx,jy,jd,ic,id].real,Hs[jf,jx,jy,jd,ic,id].imag),1)
+                        write0('\n',1)
 
     return impedance, Es, Hs
 
@@ -147,8 +145,6 @@ def zpinv2(A, tol):
     Aplus = V @ W @ UH
     Aplus.real = np.where(np.abs(Aplus.real) < tol, 0.0, Aplus.real)
     Aplus.imag = np.where(np.abs(Aplus.imag) < tol, 0.0, Aplus.imag)
-
-    return Aplus
 
     return Aplus
 

@@ -2,370 +2,16 @@
 import os
 import numpy as np
 import tkinter as tk
-from tkinter import filedialog,messagebox
+from tkinter import messagebox
 import matplotlib
 matplotlib.use('tkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2Tk
-from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 class MTPlot:
 
     def __init__(self,main):
         self.main = main
-
-    def plot(self):
-        if self.main.main == 0:
-            self.main.setdirectory('Sounding')
-            self.readcflfile()
-            self.sounding()
-        if self.main.main == 1:
-            self.main.setdirectory('XProfile')
-            self.readcflfile()
-            self.plotxprofile()
-        elif self.main.main == 2:
-            self.main.setdirectory('YProfile')
-            self.readcflfile()
-            self.plotyprofile()
-
-    def apparentresistivity(self):
-        figure = Figure([8, 8])
-        axes = []
-        for i in range(4):
-            axes.append(figure.add_subplot(2,2,i+1))
-
-        self.readcflfile()
-        mf1file = open(os.path.join(self.main.directory,'MTSphere.mf1'), 'r')
-        px = np.zeros(self.nx)
-        appres = np.zeros((self.nx,2,2))
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jx in range(self.nx):
-                    columns = [ float(f) for f in mf1file.readline().split() ]
-                    px[jx] = columns[1]
-                    appres[jx,i,j] = columns[3]
-        mf1file.close()
-
-        fer12 = []
-        file = open(os.path.join(self.main.directory,'xy_R12.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) != 25:
-                fer12.append(float(columns[2]))
-        file.close()
-        fer12 = np.array(fer12)
-        fer21 = []
-        file = open(os.path.join(self.main.directory,'xy_R21.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) != 25:
-                fer21.append(float(columns[2]))
-        file.close()
-        fer21 = np.array(fer21)
-
-        axes[0].plot(px,fer12,'.b',label='FE')
-        axes[0].plot(px,appres[:,0,1],'.r',label='Sphere')
-        axes[0].set_xlabel('X distance (m)')
-        axes[0].set_ylabel('Apparent resistivity ($\Omega$.m)')
-        axes[0].set_title('XY')
-        axes[0].legend(loc='center right')
-        axes[1].plot(px,fer21,'.b',label='FE')
-        axes[1].plot(px,appres[:,1,0],'.r',label='Sphere')
-        axes[1].set_xlabel('X distance (m)')
-        axes[1].set_title('YX')
-        axes[1].legend(loc='center right')
-
-        self.readcflfile()
-        mf1file = open(os.path.join(self.main.directory,'MTSphere.mf1'), 'r')
-        py = np.zeros(self.ny)
-        appres = np.zeros((self.ny,2,2))
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jy in range(self.ny):
-                    columns = [ float(f) for f in mf1file.readline().split() ]
-                    py[jy] = columns[2]
-                    appres[jy,i,j] = columns[3]
-        mf1file.close()
-
-        fer12 = []
-        file = open(os.path.join(self.main.directory,'xy_R12.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) == 25:
-                fer12.append(float(columns[2]))
-        file.close()
-        fer12 = np.array(fer12)
-        fer21 = []
-        file = open(os.path.join(self.main.directory,'xy_R21.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) == 25:
-                fer21.append(float(columns[2]))
-        file.close()
-        fer21 = np.array(fer21)
-
-        axes[2].plot(py,fer12,'.b',label='FE')
-        axes[2].plot(py,appres[:,0,1],'.r',label='Sphere')
-        axes[2].set_xlabel('Y distance (m)')
-        axes[2].set_ylabel('Apparent resistivity ($\Omega$.m)')     #   axes[2].set_title('XY')
-        axes[2].legend(loc='center right')
-        axes[3].plot(py,fer21,'.b',label='FE')
-        axes[3].plot(py,appres[:,1,0],'.r',label='Sphere')
-        axes[3].set_xlabel('Y distance (m)')
-        axes[3].legend(loc='center right')
-        for i in range(4):
-            if self.main.main == 0:
-                axes[i].set_ylim(60,110)
-            else:
-                axes[i].set_ylim(300,400)
-
-        master = tk.Toplevel()
-        canvasplot = FigureCanvasTkAgg(figure, master=master)
-        canvasplot.draw()
-        canvasplot.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvasplot._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        button = tk.Button(master, text='Quit', command=master.destroy)
-        button.pack(side=tk.RIGHT)
-        button = tk.Button(master=master, text='Save JPG', command=lambda: self.savefigure(figure))
-        button.pack(side=tk.RIGHT)
-
-    def difference(self):
-        figure = Figure([8, 8])
-        axes = []
-        for i in range(4):
-            axes.append(figure.add_subplot(2,2,i+1))
-
-        self.main.readcflfile()
-        mf1file = open(os.path.join(self.main.directory,'MTSphere.mf1'), 'r')
-        px = np.zeros(self.nx)
-        appres = np.zeros((self.nx,2,2))
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jx in range(self.main.nx):
-                    columns = [ float(f) for f in mf1file.readline().split() ]
-                    px[jx] = columns[1]
-                    appres[jx,i,j] = columns[3]
-        mf1file.close()
-
-        fer12 = []
-        file = open(os.path.join(self.main.directory,'xy_R12.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) != 25:
-                fer12.append(float(columns[2]))
-        file.close()
-        fer12 = np.array(fer12)
-        fer21 = []
-        file = open(os.path.join(self.main.directory,'xy_R21.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) != 25:
-                fer21.append(float(columns[2]))
-        file.close()
-        fer21 = np.array(fer21)
-
-        axes[0].plot(px,100*(np.divide(fer12,appres[:,0,1])-1),'.k')
-        axes[0].set_xlabel('X distance (m)')
-        axes[0].set_ylabel('Percent difference (%)')
-        axes[0].set_title('XY')
-        axes[0].legend(loc='center right')
-        axes[1].plot(px,100*(np.divide(fer21,appres[:,1,0])-1),'.k')
-        axes[1].set_xlabel('X distance (m)')
-        axes[1].set_title('YX')
-        axes[1].legend(loc='center right')
-
-        self.main.readcflfile()
-        mf1file = open(os.path.join(self.main.directory,'MTSphere.mf1'), 'r')
-        py = np.zeros(self.ny)
-        appres = np.zeros((self.ny,2,2))
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jy in range(self.ny):
-                    columns = [ float(f) for f in mf1file.readline().split() ]
-                    py[jy] = columns[2]
-                    appres[jy,i,j] = columns[3]
-        mf1file.close()
-
-        fer12 = []
-        file = open(os.path.join(self.main.directory,'xy_R12.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) == 25:
-                fer12.append(float(columns[2]))
-        file.close()
-        fer12 = np.array(fer12)
-        fer21 = []
-        file = open(os.path.join(self.main.directory,'xy_R21.txt'))
-        while 1:
-            line = file.readline()
-            if not line:
-                break
-            columns = line.split()
-            if float(columns[0]) == 25:
-                fer21.append(float(columns[2]))
-        file.close()
-        fer21 = np.array(fer21)
-
-        axes[2].plot(px,100*(np.divide(fer12,appres[:,0,1])-1),'.k')
-        axes[2].set_xlabel('Y distance (m)')
-        axes[2].set_ylabel('Percent difference (%)')
-        axes[3].plot(px,100*(np.divide(fer21,appres[:,1,0])-1),'.k')
-        axes[3].set_xlabel('Y distance (m)')
-        for i in range(4):
-            axes[i].set_ylim(-1,3)
-
-        master = tk.Toplevel()
-        canvasplot = FigureCanvasTkAgg(figure, master=master)
-        canvasplot.draw()
-        canvasplot.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvasplot._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        button = tk.Button(master, text='Quit', command=master.destroy)
-        button.pack(side=tk.RIGHT)
-        button = tk.Button(master=master, text='Save JPG', command=lambda: self.savefigure(figure))
-        button.pack(side=tk.RIGHT)
-
-    def orthodifference(self):
-        figure = Figure([8, 8])
-        axes = []
-        for i in range(2):
-            axes.append(figure.add_subplot(2,1,i+1))
-
-        self.main.readcflfile()
-        mf1file = open(os.path.join(self.main.directory,'MTSphere.mf1'), 'r')
-        px = np.zeros(self.nx)
-        xappres = np.zeros((self.nx,2,2))
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jx in range(self.nx):
-                    columns = [ float(f) for f in mf1file.readline().split() ]
-                    px[jx] = columns[1]
-                    xappres[jx,i,j] = columns[3]
-        mf1file.close()
-
-        self.main.readcflfile()
-        mf1file = open(os.path.join(self.main.directory,'MTSphere.mf1'), 'r')
-        py = np.zeros(self.ny)
-        yappres = np.zeros((self.ny,2,2))
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jy in range(self.ny):
-                    columns = [ float(f) for f in mf1file.readline().split() ]
-                    py[jy] = columns[2]
-                    yappres[jy,i,j] = columns[3]
-        mf1file.close()
-
-        axes[0].plot(px,100*(np.divide(yappres[:,1,0],xappres[:,0,1])-1),'.k')
-        axes[0].set_xlabel('Distance (m)')
-        axes[0].set_ylabel('Percent difference (%)')
-        axes[0].set_title('XY')
-
-        axes[1].plot(px,100*(np.divide(yappres[:,0,1],xappres[:,1,0])-1),'.k')
-        axes[1].set_xlabel('Distance (m)')
-        axes[1].set_ylabel('Percent difference (%)')
-        axes[1].set_title('YX')
-
-        master = tk.Toplevel()
-        canvasplot = FigureCanvasTkAgg(figure, master=master)
-        canvasplot.draw()
-        canvasplot.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvasplot._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        button = tk.Button(master, text='Quit', command=master.destroy)
-        button.pack(side=tk.RIGHT)
-        button = tk.Button(master=master, text='Save JPG', command=lambda: self.savefigure(figure))
-        button.pack(side=tk.RIGHT)
-
-    def tipper(self):
-
-        self.readcflfile()
-        mf1file = open(os.path.join(self.test.directory, 'MTSphere.mf1'), 'r')
-        px = np.zeros(self.nx)
-        Kzx = np.zeros(self.nx, dtype=complex)
-        for i in range(2):
-            for j in range(2):
-                for k in range(3):
-                    mf1file.readline()
-                for jx in range(self.nx):
-                    columns = [float(f) for f in mf1file.readline().split()]
-                    px[jx] = columns[1]
-        for k in range(3):
-            mf1file.readline()
-        for jx in range(self.nx):
-            columns = [float(f) for f in mf1file.readline().split()]
-            Kzx[jx] = columns[3] + 1j * columns[4]
-        mf1file.close()
-
-        Tzx = []
-        file = open(os.path.join(self.test.directory,'xy_Tzx.txt'))
-        while 1:
-            ligne = file.readline().rstrip()
-            if not ligne:
-                break
-            import re
-
-            # Test du match
-            pattern = r'([-\d.E+-]+)\s+([-\d.E+-]+)\s*\(\s*([-\d.E+-]+)\s*,\s*([-\d.E+-]+)\s*\)'
-            match = re.match(pattern, ligne.strip())
-            if match:
-                a, b, c, d = map(float, match.groups())
-                if a != 25:
-                    Tzx.append(-c-1j*d)
-            else:
-                print("Échec du match. Pattern utilisé :", pattern)
-        file.close()
-        Tzx = np.array(Tzx, dtype=complex)
-
-        figure = Figure([8, 8])
-        axe = figure.add_subplot(1, 1, 1)
-        axe.plot(px, 100 * Kzx.real, 'b', label='Sphere Real')
-        axe.plot(px, 100 * Kzx.imag, 'r', label='Sphere Imaginary')
-        axe.plot(px, 100 * Tzx.real, '.b', label='FE Real')
-        axe.plot(px, 100 * Tzx.imag, '.r', label='FE Imaginary')
-        axe.set_xlabel('X Distance (m)')
-        axe.set_ylabel('X Tipper ratio (%)')
-        axe.legend(loc='upper right')
-
-        master = tk.Toplevel()
-        canvasplot = FigureCanvasTkAgg(figure, master=master)
-        canvasplot.draw()
-        canvasplot.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvasplot._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        button = tk.Button(master, text='Quit', command=master.destroy)
-        button.pack(side=tk.RIGHT)
-        button = tk.Button(master=master, text='Save JPG', command=lambda: self.savefigure(figure))
-        button.pack(side=tk.RIGHT)
 
     def plotsounding(self):
         self.main.readcflfile()
@@ -409,28 +55,28 @@ class MTPlot:
         figure, axes = plt.subplots(4,1,figsize=(8,8))
         axes[0].plot(freq,appres[:,0,1],'b',label='XY')
         axes[0].plot(freq,appres[:,1,0],'r',label='YX')
-        axes[0].set_ylabel('Apparent resistivity ($\Omega$.m)')
+        axes[0].set_ylabel(r'Apparent resistivity ($\Omega \cdot m$)')
         axes[0].legend(loc='upper right')
         axes[0].set_xscale('log')
         axes[0].set_xlim(min(freq),max(freq))
         axes[1].plot(freq,phase[:,0,1],'b',label='XY')
         axes[1].plot(freq,phase[:,1,0]+180,'r',label='YX+180')
         axes[1].set_xlabel('Frequency (Hz)')
-        axes[1].set_ylabel('Phase ($^\circ$)')
+        axes[1].set_ylabel(r'Phase ($^\circ$)')
         axes[1].legend(loc='upper right')
         axes[1].set_xscale('log')
         axes[1].set_xlim(min(freq),max(freq))
         if diagonal:
             axes[2].plot(freq, appres[:, 0, 0], 'b', label='XX')
             axes[2].plot(freq, appres[:, 1, 1], 'r', label='YY')
-            axes[2].set_ylabel('Apparent resistivity ($\Omega$.m)')
+            axes[2].set_ylabel(r'Apparent resistivity ($\Omega \cdot m$)')
             axes[2].legend(loc='upper right')
             axes[2].set_xscale('log')
             axes[2].set_xlim(min(freq),max(freq))
             axes[3].plot(freq, phase[:, 0, 0], 'b', label='XX')
             axes[3].plot(freq, phase[:, 1, 1] + 180, 'r', label='YY+180')
             axes[3].set_xlabel('Frequency (Hz)')
-            axes[3].set_ylabel('Phase ($^\circ$)')
+            axes[3].set_ylabel(r'Phase ($^\circ$)')
             axes[3].legend(loc='upper right')
             axes[3].set_xscale('log')
             axes[3].set_xlim(min(freq),max(freq))
@@ -527,21 +173,21 @@ class MTPlot:
         figure, axes = plt.subplots(4,1,figsize=(8,8))
         axes[0].plot(pu,appres[:,0,1],'b',label='XY')
         axes[0].plot(pu,appres[:,1,0],'r',label='YX')
-        axes[0].set_ylabel('Apparent resistivity ($\Omega$.m)')
+        axes[0].set_ylabel(r'Apparent resistivity ($\Omega \cdot m$)')
         axes[0].legend(loc='upper left')
         ax2 = axes[0].twinx()
         ax2.plot(pu,appres[:,0,0],'b-+',label='XX')
         ax2.plot(pu,appres[:,1,1],'r-+',label='YY')
-        ax2.set_ylabel('Apparent resistivity ($\Omega$.m)')
+        ax2.set_ylabel(r'Apparent resistivity ($\Omega \cdot m$)')
         ax2.legend(loc='upper right')
         axes[1].plot(pu,phase[:,0,1],'b',label='XY')
         axes[1].plot(pu,(phase[:,1,0]+180) % 360,'r',label='YX+180')
-        axes[1].set_ylabel('Phase ($^\circ$)')
+        axes[1].set_ylabel(r'Phase ($^\circ$)')
         axes[1].legend(loc='upper left')
         ax2 = axes[1].twinx()
         ax2.plot(pu,phase[:,0,0],'b-+',label='XX')
         ax2.plot(pu,(phase[:,1,1]+180) % 360,'r-+',label='YY+180')
-        ax2.set_ylabel('Phase ($^\circ$)')
+        ax2.set_ylabel(r'Phase ($^\circ$)')
         ax2.legend(loc='upper right')
         axes[2].plot(pu,100*Kzx.real,'b',label='Real')
         axes[2].plot(pu,100*Kzx.imag,'r',label='Imaginary')
@@ -757,13 +403,11 @@ class MTPlot:
             X = np.array(px)
             xlabel = 'X Distance (m)'
             ylabel = 'Depth (m)'
-            x,y = np.meshgrid(X,Y- self.main.depth)
         else:
             X = np.array(px)
             Y = np.array(py)
             xlabel = 'X Distance (m)'
             ylabel = 'Y Distance (m)'
-            x,y = np.meshgrid(X,Y)
         z = 0.0
 
         taille_fleche = X[1] - X[0]
@@ -803,7 +447,7 @@ class MTPlot:
 
         # 4. Affichage avec colormap (la couleur change selon l'amplitude)
         fig, axes = plt.subplots(2,2,figsize=(12, 12))
-        im0 = axes[0, 0].pcolormesh(X, Y, color_E_real, cmap='jet', shading='nearest')
+        im0 = axes[0, 0].pcolormesh(X, Y, color_E_real.T, cmap='jet', shading='nearest')
         axes[0,0].quiver(X, Y, U_E_real, V_E_real,
                                  angles='xy', scale_units='xy', scale=1, color='black')
         # Ajouter une barre de couleur pour l'amplitude
@@ -811,7 +455,7 @@ class MTPlot:
         axes[0,0].set_title('E field, X polarization')
         axes[0,0].set_ylabel(ylabel)
 
-        im1 = axes[1,0].pcolormesh(X, Y, color_E_imag, cmap='jet', shading='nearest')
+        im1 = axes[1,0].pcolormesh(X, Y, color_E_imag.T, cmap='jet', shading='nearest')
         axes[1,0].quiver(X, Y, U_E_imag , V_E_imag,
                                  angles='xy', scale_units='xy', scale=1, color='black')
         # Ajouter une barre de couleur pour l'amplitude
@@ -819,14 +463,14 @@ class MTPlot:
         axes[1,0].set_ylabel(ylabel)
         axes[1,0].set_xlabel(xlabel)
 
-        im2 = axes[0,1].pcolormesh(X, Y, color_H_real, cmap='jet', shading='nearest')
+        im2 = axes[0,1].pcolormesh(X, Y, color_H_real.T, cmap='jet', shading='nearest')
         axes[0,1].quiver(X, Y, U_H_real, V_H_real,
                                  angles='xy', scale_units='xy', scale=1, color='black')
         # Ajouter une barre de couleur pour l'amplitude
         fig.colorbar(im2, ax=axes[0,1], label='log10(H real)')
         axes[0,1].set_title('H field, Y polarization')
 
-        im3 = axes[1, 1].pcolormesh(X, Y, color_H_imag, cmap='jet', shading='nearest')
+        im3 = axes[1, 1].pcolormesh(X, Y, color_H_imag.T, cmap='jet', shading='nearest')
         axes[1,1].quiver(X, Y, U_H_imag , V_H_imag,
                                  angles='xy', scale_units='xy', scale=1, color='black')
         # Ajouter une barre de couleur pour l'amplitude

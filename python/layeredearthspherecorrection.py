@@ -1,31 +1,33 @@
 
 import numpy as np
 import scipy
-import sphericalfunctions as sphfun
-import hssphere_mt as hssphere_mt
+from sphericalfunctions import (SphericalGeometryInitialisation,
+                                RadialFields,
+                                MTSphericalHarmonicAnalysis)
+from hssphere_mt import MTSphere_MultipleSources
 
-def MTLayeredEarthCorrection(nw, nterms, nlyr, thk, depth, radius, sxlyr, yhatl, zhatl, yhats, zhats, rtm, rte, htarg):
+def MTLayeredEarthCorrection(write0, nterms, nlyr, thk, depth, radius, sxlyr, yhatl, zhatl, yhats, zhats, rtm, rte, htarg):
 
     nlat = 4 * nterms + 1
     nlon = 4 * nterms
     center = np.zeros(3)
     center[2] = depth
-    ps = sphfun.SphericalGeometryInitialisation(center, radius, nlat, nlon)
-    E, H = hssphere_mt.MTSphere_MultipleSources(nw,nterms,nlat,nlon,depth,depth,nlyr,thk,radius,yhatl,zhatl,rtm,rte,htarg)
+    ps = SphericalGeometryInitialisation(center, radius, nlat, nlon)
+    E, H = MTSphere_MultipleSources(nterms,nlat,nlon,depth,depth,nlyr,thk,radius,yhatl,zhatl,rtm,rte,htarg)
     AI = np.zeros((3,2 * nterms, 2 * nterms), dtype=complex)
-    nw.write(' Spherical Harmonic Analysis\n')
+    write0(' Spherical Harmonic Analysis\n',1)
     for m in [-1,1]:
         if m < 0:
-            nw.write('\nSphere retroaction, negative order\n')
+            write0('\nSphere retroaction, negative order\n',1)
         else:
-            nw.write('\nSphere retroaction, positive order\n')
+            write0('\nSphere retroaction, positive order\n',1)
         icr = -1
         C = np.zeros((2*nterms, 2*nterms), dtype=complex)
         for ic in range(2):
             for n in range(1, nterms + 1):
                 icr += 1
-                Er, Hr = sphfun.RadialFields(nlat, nlon, ps, center, E[ic,n,m,:,:,:], H[ic,n,m,:,:,:])
-                psia, psif = sphfun.MTSphericalHarmonicAnalysis(nterms, nlat, nlon, radius, \
+                Er, Hr = RadialFields(nlat, nlon, ps, center, E[ic,n,m,:,:,:], H[ic,n,m,:,:,:])
+                psia, psif = MTSphericalHarmonicAnalysis(nterms, nlat, nlon, radius, \
                                 yhatl[sxlyr], zhatl[sxlyr], Er, Hr, False)
                 ihr = -1
                 for ih in range(2):
@@ -35,8 +37,8 @@ def MTLayeredEarthCorrection(nw, nterms, nlyr, thk, depth, radius, sxlyr, yhatl,
                             C[ihr, icr] = psia[nh, m]
                         else:
                             C[ihr, icr] = psif[nh, m]
-                        nw.write('{:5d}{:5d}{:5d}{:5d}{:15.7g}{:15.7}\n'. \
-                                 format(ic+1,n,ih+1,nh,C[ihr, icr].real,C[ihr, icr].imag))
+                        write0('{:5d}{:5d}{:5d}{:5d}{:15.7g}{:15.7}\n'. \
+                                 format(ic+1,n,ih+1,nh,C[ihr, icr].real,C[ihr, icr].imag),1)
         A = np.zeros((2*nterms,2*nterms),dtype=complex)
         for ir in range(2*nterms):
             for ih in range(2*nterms):
@@ -44,14 +46,12 @@ def MTLayeredEarthCorrection(nw, nterms, nlyr, thk, depth, radius, sxlyr, yhatl,
                     A[ir, ih] = 1. - C[ir, ih]
                 else:
                     A[ir, ih] = - C[ir, ih]
-#        Ar = scipy.linalg.inv(A)
-#        Ar = scipy.linalg.pinv(A)
         lu, piv = scipy.linalg.lu_factor(A)
         Ar = scipy.linalg.lu_solve((lu, piv), np.eye(A.shape[0]))
         if m < 0:
-            nw.write('\nSphere correction, negative order\n')
+            write0('\nSphere correction, negative order\n',1)
         else:
-            nw.write('\nSphere correction, positive order\n')
+            write0('\nSphere correction, positive order\n',1)
         icr = -1
         for ic in range(2):
             for n in range(1,nterms+1):
@@ -60,8 +60,8 @@ def MTLayeredEarthCorrection(nw, nterms, nlyr, thk, depth, radius, sxlyr, yhatl,
                 for ih in range(2):
                     for nh in range(1,nterms+1):
                         ihr += 1
-                        nw.write('{:5d}{:5d}{:5d}{:5d}{:15.7g}{:15.7}\n'. \
-                                 format(ic+1,n,ih+1,nh,Ar[ihr, icr].real,C[ihr, icr].imag))
+                        write0('{:5d}{:5d}{:5d}{:5d}{:15.7g}{:15.7}\n'. \
+                                 format(ic+1,n,ih+1,nh,Ar[ihr, icr].real,Ar[ihr, icr].imag),1)
         AI[m,:,:] = Ar
 
     return AI

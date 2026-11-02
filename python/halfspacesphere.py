@@ -1,9 +1,13 @@
 
 import math
 import numpy as np
-import layeredearthfunctions as lefun
-import sphericalfunctions as sphfun
+import sys
 import empymod
+from layeredearthfunctions import (HSSphere_Ker, CylindricalDerivatives)
+from sphericalfunctions import (SphericalFactorInitialisation,
+                                VerticalFieldSphericalCoefficients,
+                                MTFieldSphericalCoefficients,
+                                MTFieldsFromSphericalCoefficients)
 
 def MTSphere_SingleSource(nterms, psia, psif, psiat, psift, nx, ny, nd, ps, nlyr, thk, yhat, zhat, yhats, zhats, dpthl, zs, radius, htarg):
 
@@ -51,14 +55,14 @@ def MTSphere_SingleSource(nterms, psia, psif, psiat, psift, nx, ny, nd, ps, nlyr
                     theta = math.acos(dd/r)
                     if r <= radius:
                         singular = False
-                        Enm, Hnm = sphfun.MTFieldSphericalCoefficients(nterms,psiat,psift,yhats,zhats)
+                        Enm, Hnm = MTFieldSphericalCoefficients(nterms,psiat,psift,yhats,zhats)
                         k = np.sqrt(-yhats*zhats)
-                        E[jx,jy,jd,:],H[jx,jy,jd,:] = sphfun.MTFieldsFromSphericalCoefficients(Enm,Hnm,nterms,k,r,theta,phi,singular)
+                        E[jx,jy,jd,:],H[jx,jy,jd,:] = MTFieldsFromSphericalCoefficients(Enm,Hnm,nterms,k,r,theta,phi,singular)
                     else:
                         singular = True
-                        Enm, Hnm = sphfun.MTFieldSphericalCoefficients(nterms,psia,psif,yhat[rxlyr],zhat[rxlyr])
+                        Enm, Hnm = MTFieldSphericalCoefficients(nterms,psia,psif,yhat[rxlyr],zhat[rxlyr])
                         k = np.sqrt(-yhat[rxlyr]*zhat[rxlyr])
-                        E[jx,jy,jd,:],H[jx,jy,jd,:] = sphfun.MTFieldsFromSphericalCoefficients(Enm,Hnm,nterms,k,r,theta,phi,singular)
+                        E[jx,jy,jd,:],H[jx,jy,jd,:] = MTFieldsFromSphericalCoefficients(Enm,Hnm,nterms,k,r,theta,phi,singular)
                 else:
                     rho = np.sqrt(ps[jx, jy, jd, 0] ** 2 + ps[jx, jy, jd, 1] ** 2)
                     if rho < 0.001:
@@ -69,8 +73,8 @@ def MTSphere_SingleSource(nterms, psia, psif, psiat, psift, nx, ny, nd, ps, nlyr
                     Eh, Hh = MTSphere_Hnk_SingleSource(nterms, sxlyr, rxlyr, psia, psif, nlyr, thk, dpthl, \
                                             yhat, zhat, zs, zr, rho, htarg)
                     for m in range(-2,3):
+                        emphi = np.exp(1j * m * phi)
                         for ic in range(3):
-                                emphi = np.exp ( 1j * m * phi)
                                 E[jx,jy,jd,ic] = E[jx,jy,jd,ic] + Eh[m,ic] * emphi
                                 H[jx,jy,jd,ic] = H[jx,jy,jd,ic] + Hh[m,ic] * emphi
 
@@ -88,12 +92,11 @@ def MTSphere_Hnk_SingleSource(nterms, sxlyr, rxlyr, psia, psif, nlyr, thk, dpthl
     filt = htarg['dlf']
     Eh = np.zeros((5,3),dtype=complex)
     Hh = np.zeros((5,3),dtype=complex)
+    nfilt2 = np.argmin(np.abs(filt.base-rho))
 
-    for ift in range(0,nfilt):
+    def loop(ift):
         lmbda = lambd[0,ift]
-        if lmbda > 0.5:
-            continue
-        An, Fn = lefun.HSSphere_Ker(lmbda, sxlyr, nlyr, thk, dpthl, zs, yhat, zhat)
+        An, Fn = HSSphere_Ker(lmbda, sxlyr, nlyr, thk, dpthl, zs, yhat, zhat)
         Az, Fz = MTSingleSourceCoefficients(nterms,psia,psif,lmbda,
                             yhat[sxlyr],zhat[sxlyr])
         Em, Hm = MTSingleSourceFields(nlyr, dpthl, sxlyr, rxlyr, zs, zr,
@@ -102,20 +105,53 @@ def MTSphere_Hnk_SingleSource(nterms, sxlyr, rxlyr, psia, psif, nlyr, thk, dpthl
         Hw = np.zeros((5, 3), dtype=complex)
         Wj = np.zeros(3)
         Wj[0] = filt.j0[ift]
-        if rho > 0.0015:
+        if rho > 0.01:
             Wj[1] = filt.j1[ift]
             Wj[2] = 2 * Wj[1] / (rho * lmbda) - Wj[0]
         for m in range(-2,3):
             for ic in range(3):
                 if rho <= 0.0015 and m != 0:
                     continue
-                Ew[m,ic] = Ew[m,ic] + Em[ic, m] * Wj[abs(m)]
-                Hw[m,ic] = Hw[m,ic] + Hm[ic, m] * Wj[abs(m)]
-        Ew = Ew * lmbda
-        Hw = Hw * lmbda
+                Ew[m,ic] = Ew[m,ic] + Em[ic, m] * Wj[abs(m)] * lmbda
+                Hw[m,ic] = Hw[m,ic] + Hm[ic, m] * Wj[abs(m)] * lmbda
+        return Ew, Hw
 
+    def testjump(Ew, Eh, Hw, Hh):
+        tol = 1.e-6
+        tol2 = 1.e-35
+        jump = True
+        for mp in range(-2, 3):
+            for int in range(3):
+                Qr = abs(Eh[mp, int].real)
+                Qi = abs(Eh[mp, int].imag)
+                if Qr > tol2 and abs(Ew[mp, int].real) > tol * Qr:
+                    jump = False
+                if Qi > tol2 and abs(Ew[mp, int].imag) > tol * Qi:
+                    jump = False
+                Qr = abs(Hh[mp, int].real)
+                Qi = abs(Hh[mp, int].imag)
+                if Qr > tol2 and abs(Hw[mp, int].real) > tol * Qr:
+                    jump = False
+                if Qi > tol2 and abs(Hw[mp, int].imag) > tol * Qi:
+                    jump = False
+
+        return jump
+
+    for ift in range(nfilt2,nfilt):
+        Ew, Hw = loop(ift)
         Eh = Eh + Ew
         Hh = Hh + Hw
+        jump = testjump(Ew, Eh, Hw, Hh)
+        if jump and ift - nfilt2 > 10:
+            break
+
+    for ift in range(nfilt2-1,-1,-1):
+        Ew, Hw = loop(ift)
+        Eh = Eh + Ew
+        Hh = Hh + Hw
+        jump = testjump(Ew, Eh, Hw, Hh)
+        if jump and ift - nfilt2 < -10:
+            break
 
     Eh = Eh / (4 * np.pi * rho)
     Hh = Hh / (4 * np.pi * rho)
@@ -133,7 +169,7 @@ def MTSingleSourceCoefficients(nterms, psia, psif, lmbda, yhat, zhat):
         psiac[:,m] = psia[:,m]
         psifc[:,m] = psif[:,m]
     
-    Eznm, Hznm = sphfun.VerticalFieldSphericalCoefficients(nterms, psiac, psifc, yhat, zhat)
+    Eznm, Hznm = VerticalFieldSphericalCoefficients(nterms, psiac, psifc, yhat, zhat)
     zeta = SphericalCylindricalConversionCoefficients(nterms + 1, k, lmbda, u)
 
     Az = np.zeros((2,5),dtype=complex)
@@ -154,7 +190,7 @@ def SphericalCylindricalConversionCoefficients(nterms, k, lmbda, u):
     # Earth element is a cylindrical coefficient. The first two index refer to spherical
     # functions and the last index refer to the cylindrical functions. 
 
-    A, B, C = sphfun.SphericalFactorInitialisation(nterms)
+    A, B, C = SphericalFactorInitialisation(nterms)
 
     zeta = np.zeros((2, nterms + 1, 2 * nterms + 1), dtype=complex)
     for id in range(2):
@@ -173,7 +209,7 @@ def SphericalCylindricalConversionCoefficients(nterms, k, lmbda, u):
                     if id == 0:
                         zeta[id,n,m] = tz + u * zeta[0,n-1,m] / ( k * A[n-1,m] )
                     else:
-                        zeta[id,n,m] = tz - u * zeta[0,n-1,m] / ( k * A[n-1,m] )
+                        zeta[id,n,m] = tz - u * zeta[1,n-1,m] / ( k * A[n-1,m] )
 
     return zeta
 
@@ -184,7 +220,7 @@ def MTSingleSourceFields(nlyr, dpthl, sxlyr, rxlyr, zs, zr, lmbda, yhat, zhat, A
     dz = np.array([- ur, ur],dtype=complex)
     Em = np.zeros((3,5),dtype=complex)
     Hm = np.zeros((3,5),dtype=complex)
-    CD = lefun.CylindricalDerivatives(1, lmbda)
+    CD = CylindricalDerivatives(1, lmbda)
     for isr in range(2):
         Azisr = np.zeros(3, dtype=complex)
         Fzisr = np.zeros(3, dtype=complex)
@@ -199,11 +235,18 @@ def MTSingleSourceFields(nlyr, dpthl, sxlyr, rxlyr, zs, zr, lmbda, yhat, zhat, A
             if ( id == 0 and rxlyr == 0 ) or ( id == 1 and rxlyr == nlyr ):
                 continue
             elif id == 0:
-                decay = np.exp ( - ur * (zr - dpthl[rxlyr]) )
+                ep = - ur * (zr - dpthl[rxlyr])
             elif rxlyr == 0:
-                decay = np.exp(ur * zr)
+                ep =   ur * zr
             else:
-                decay = np.exp( ur * (zr - dpthl[rxlyr]))
+                ep =   ur * (zr - dpthl[rxlyr])
+            if ep.real > 700:
+                print('Infinite exponent encountered.')
+                sys.exit(0)
+            elif ep.real < -700:
+                decay = 0.0
+            else:
+                decay = np.exp(ep)
             rtm = An[id,isr, rxlyr] * decay
             rte = Fn[id,isr, rxlyr] * decay
             Em[0,:] = Em[0,:] + rtm * Azdx * dz[id] / yhat

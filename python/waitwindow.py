@@ -1,6 +1,5 @@
 import sys
 import tkinter as tk
-from tkinter import ttk
 import time
 from tkinter import messagebox
 

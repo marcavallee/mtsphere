@@ -2,11 +2,11 @@
 import empymod
 import math
 import numpy as np
-import layeredearthfunctions as lefun
-import halfspacesphere as hssphere
-import sphericalfunctions as sphfun
+from sphericalfunctions import gauss_legendre, VerticalFieldSphericalCoefficients
+from layeredearthfunctions import HSSphere_Ker, CylindricalDerivatives
+from halfspacesphere import SphericalCylindricalConversionCoefficients
 
-def MTSphere_MultipleSources(nw, nterms, nlat, nlon, zs, zr, nlyr, thkd, radius, yhat, zhat, rtm, rte, htarg):
+def MTSphere_MultipleSources(nterms, nlat, nlon, zs, zr, nlyr, thkd, radius, yhat, zhat, rtm, rte, htarg):
     """
     Computes the vertical electric and magnetic field spherical coefficients
     above and below the receiver layer.The source is represented by its potential
@@ -42,21 +42,19 @@ def MTSphere_MultipleSources(nw, nterms, nlat, nlon, zs, zr, nlyr, thkd, radius,
                 sxlyr = jz
                 break
         for jr in range(nlyr, 0, -1):
-            if zr > dpthl[jz]:
-                rxlyr = jz
+            if zr > dpthl[jr]:
+                rxlyr = jr
                 break
 
-    xgauss, wgauss = sphfun.gauss_legendre(nlat)
+    xgauss, wgauss = gauss_legendre(nlat)
     for jlat in range(nlat):
         theta = np.arccos(xgauss[jlat])
         zlat = radius * math.cos(theta) + zr
         rho = radius * math.sin(theta)
-        if rho < 0.01:
-            rho = 0.01
-        if jlat == 19:
-            x = 1
+        if rho < 0.001:
+            rho = 0.001
         Et, Ht = MTSphere_Hnk_MultipleSources(nterms, sxlyr, rxlyr, nlyr, thkd,
-                            dpthl, yhat, zhat, zs, zlat, rho, rtm, rte, htarg)   #     nw.write('\nMultipleSources: jlat:{:5}\n'.format(jlat+1))
+                            dpthl, yhat, zhat, zs, zlat, rho, rtm, rte, htarg)
         for ic in range(2):
             for n in range(1, nterms + 1):
                 for m in [-1, 1]:
@@ -85,16 +83,33 @@ def MTSphere_Hnk_MultipleSources(nterms, sxlyr, rxlyr, nlyr, thk, dpthl, yhat, z
     filt = htarg['dlf']
     Et = np.zeros((2,nterms+1,3,5,3),dtype=complex)
     Ht = np.zeros((2,nterms+1,3,5,3),dtype=complex)
-    nfilt2 = np.argmax(np.abs(filt.j0))
+    nfilt2 = np.argmin(np.abs(filt.base-rho))
+
+    def loop(ift):
+        lmbda = lambd[0,ift]
+        An, Fn = HSSphere_Ker(lmbda, sxlyr, nlyr, thk, dpthl, zs, yhat, zhat)
+        Az, Fz = MTMultipleSourceCoefficients(nterms, lmbda, yhat[sxlyr], zhat[sxlyr], rtm, rte)
+        Em, Hm = MTMultipleSourceFields(nterms, nlyr, dpthl, rxlyr, lmbda, zr, yhat[rxlyr], zhat[rxlyr], Az, Fz, An, Fn)
+        Wj = np.zeros(3)
+        Ew = np.zeros((2, nterms+1, 3, 5, 3), dtype=complex)
+        Hw = np.zeros((2, nterms+1, 3, 5, 3), dtype=complex)
+        Wj[0] = filt.j0[ift]
+        if rho > 0.0015:
+            Wj[1] = filt.j1[ift]
+            Wj[2] = 2 * Wj[1] / ( rho * lmbda ) - Wj[0]
+        for m in range(-2,3):
+            Ew[:,:,:, m,:] = Ew[:,:,:, m,:] + Em[:,:,:, m,:] * Wj[abs(m)] * lmbda
+            Hw[:,:,:, m,:] = Hw[:,:,:, m,:] + Hm[:,:,:, m,:] * Wj[abs(m)] * lmbda
+        return Ew, Hw
 
     def testjump(nterms, Ew, Et, Hw, Ht):
         tol = 1.e-6
         tol2 = 1.e-35
         jump = True
         for ic in range(2):
-            for n in range(1,nterms+1):
-                for m in [-1,1]:
-                    for mp in range(-2,3):
+            for n in range(1, nterms + 1):
+                for m in [-1, 1]:
+                    for mp in range(-2, 3):
                         for int in range(3):
                             Qr = abs(Et[ic, n, m, mp, int].real)
                             Qi = abs(Et[ic, n, m, mp, int].imag)
@@ -111,41 +126,24 @@ def MTSphere_Hnk_MultipleSources(nterms, sxlyr, rxlyr, nlyr, thk, dpthl, yhat, z
 
         return jump
 
-    def loop(ift):
-        lmbda = lambd[0,ift]
-        An, Fn = lefun.HSSphere_Ker(lmbda, sxlyr, nlyr, thk, dpthl, zs, yhat, zhat)
-        Az, Fz = MTMultipleSourceCoefficients(nterms, lmbda, yhat[sxlyr], zhat[sxlyr], rtm, rte)
-        Em, Hm = MTMultipleSourceFields(nterms, nlyr, dpthl, rxlyr, lmbda, zr, yhat[rxlyr], zhat[rxlyr], Az, Fz, An, Fn)
-        Wj = np.zeros(3)
-        Ew = np.zeros((2, nterms+1, 3, 5, 3), dtype=complex)
-        Hw = np.zeros((2, nterms+1, 3, 5, 3), dtype=complex)
-        Wj[0] = filt.j0[ift]
-        if rho > 0.01:
-            Wj[1] = filt.j1[ift]
-            Wj[2] = 2 * Wj[1] / ( rho * lmbda ) - Wj[0]
-        for m in range(-2,3):
-            Ew[:,:,:, m,:] = Ew[:,:,:, m,:] + Em[:,:,:, m,:] * Wj[abs(m)] * lmbda
-            Hw[:,:,:, m,:] = Hw[:,:,:, m,:] + Hm[:,:,:, m,:] * Wj[abs(m)] * lmbda
-        return Ew, Hw
-
     for ift in range(nfilt2,nfilt):
         Ew, Hw = loop(ift)
         Et = Et + Ew
         Ht = Ht + Hw
         jump = testjump(nterms,Ew,Et,Hw,Ht)
-        if jump and ift - nfilt2 > 50:
+        if jump and ift - nfilt2 > 10:
             break
 
-    for ift in range(nfilt2, -1, -1):
+    for ift in range(nfilt2-1, -1, -1):
         Ew, Hw = loop(ift)
         Et = Et + Ew
         Ht = Ht + Hw
         jump = testjump(nterms, Ew, Et, Hw, Ht)
-        if jump and ift - nfilt2 < -50:
+        if jump and ift - nfilt2 < -10:
             break
             
-    Et = Et / (rho * 4. * np.pi)
-    Ht = Ht / (rho * 4. * np.pi)
+    Et = Et / (4. * np.pi * rho)
+    Ht = Ht / (4. * np.pi * rho)
     
     return Et, Ht
 
@@ -157,7 +155,7 @@ def MTMultipleSourceCoefficients(nterms, lmbda, yhat, zhat, rtm, rte):
     k = np.sqrt(- yhat * zhat)
     lmbdasq = lmbda * lmbda
     u = np.sqrt(lmbdasq + yhat * zhat)
-    zeta = hssphere.SphericalCylindricalConversionCoefficients(nterms + 1, k, lmbda, u)
+    zeta = SphericalCylindricalConversionCoefficients(nterms + 1, k, lmbda, u)
     for ic in range(2):
         for n in range(1,nterms+1):
             for m in [-1,1]:
@@ -167,7 +165,7 @@ def MTMultipleSourceCoefficients(nterms, lmbda, yhat, zhat, rtm, rte):
                     psia[n, m] = rtm[n]
                 else:
                     psif[n, m] = rte[n]
-                Eznm, Hznm = sphfun.VerticalFieldSphericalCoefficients(nterms, psia, psif, yhat, zhat)
+                Eznm, Hznm = VerticalFieldSphericalCoefficients(nterms, psia, psif, yhat, zhat)
                 for id in range(2):
                     Azs = 0.
                     Fzs = 0.
@@ -233,7 +231,7 @@ def MTMultipleSourceFields(nterms, nlyr, dpthl, rxlyr, lmbda, z, yhat, zhat, Az,
             rtm = An[id,isr, rxlyr] * decay
             rte = Fn[id,isr, rxlyr] * decay
             for ic in range(2):
-                CD = lefun.CylindricalDerivatives(1, lmbda)
+                CD = CylindricalDerivatives(1, lmbda)
                 for n in range(1,nterms+1):
                     for m in [-1,1]:
                         Azid = np.zeros(3,dtype=complex)

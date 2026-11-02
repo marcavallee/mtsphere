@@ -1,11 +1,7 @@
 
 import math
-import cmath
 import numpy as np
 import scipy.special as scispe
-import pyshtools as pysh
-from winerror import FWP_E_NEVER_MATCH
-
 
 def gauss_legendre(n):
     """
@@ -95,7 +91,7 @@ def Ynm(n, m, theta, phi):
 
     factor = (-1) ** m * math.sqrt( (2 * n + 1)  * math.factorial(n - abs(m) ) / \
                                     (4 * np.pi * math.factorial(n + abs(m) ) ) )
-    Pmn_z = scispe.assoc_legendre_p(n,abs(m),np.cos(theta))
+    Pmn_z = scispe.assoc_legendre_p(n,abs(m),np.cos(theta))[0]
     result = factor * Pmn_z * np.exp(1j * m * phi)
 
     return result
@@ -122,10 +118,11 @@ def ReflectionCoefficients(nterms, radius, yhat, zhat, yhats, zhats):
         hka   = jka   - 1j * yka
         dhka  = djka  - 1j * dyka
 
-        try:
-            dajksajksa = 1 + ksa * djksa / jksa
-        except:
+        z = djksa / jksa
+        if math.isnan(z.real) or math.isnan(z.imag):
             dajksajksa = 1 + 1j * ksa
+        else:
+            dajksajksa = 1 + ksa * djksa / jksa
         dajkajka   = 1 + ka  * djka  / jka
         dahkahka   = 1 + ka  * dhka  / hka
 
