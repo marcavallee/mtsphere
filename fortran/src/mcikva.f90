@@ -261,47 +261,56 @@
         RETURN
         END
 
-        INTEGER FUNCTION MSTA2(X,N,MP)
+        INTEGER FUNCTION msta2(x, n, mp)
+            ! ===================================================================
+            ! Objectif : Déterminer le point de départ M pour la récurrence
+            !            descendante des fonctions de Bessel.
+            ! ===================================================================
+            IMPLICIT NONE
+            REAL(8), INTENT(IN) :: x
+            INTEGER, INTENT(IN) :: n, mp
+    
+            REAL(8) :: a0, hmp, ejn, obj, f0, f1, f, n0, n1, nn
+            INTEGER :: it
+            REAL(8), EXTERNAL :: envj
 
-!       ===================================================
-!       Purpose: Determine the starting point for backward
-!                recurrence such that all Jn(x) has MP
-!                significant digits
-!       Input :  x  --- Argument of Jn(x)
-!                n  --- Order of Jn(x)
-!                MP --- Significant digit
-!       Output:  MSTA2 --- Starting point
-!       ===================================================
+            a0 = ABS(x) + 1.0d-10
+            hmp = 0.5d0 * mp
+            ejn = envj(n, a0)
+    
+            ! Détermination de la cible (objective function)
+            IF (ejn <= hmp) THEN
+                obj = mp
+                n0 = INT(1.1d0 * a0) + 1.0d0
+            ELSE
+                obj = hmp + ejn
+                n0 = DBLE(n)
+            END IF
+    
+            f0 = envj(INT(n0), a0) - obj
+            n1 = n0 + 5.0d0
+            f1 = envj(INT(n1), a0) - obj
+    
+            ! Iterations pour trouver la racine (Méthode de la sécante)
+            DO it = 1, 20
+                nn = n1 - (n1 - n0) / (1.0d0 - f0 / f1)
+                f = envj(INT(nn), a0) - obj
+                IF (ABS(nn - n1) < 1.0d0) EXIT
+                n0 = n1
+                f0 = f1
+                n1 = nn
+                f1 = f
+            END DO
+    
+            msta2 = INT(nn) + 10
+            RETURN
+        END FUNCTION msta2
 
-        IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-        A0=DABS(X)
-        HMP=0.5D0*MP
-        EJN=ENVJ(N,A0)
-        IF (EJN.LE.HMP) THEN
-           OBJ=MP
-           N0=INT(1.1D0*A0)
-        ELSE
-           OBJ=HMP+EJN
-           N0=N
-        ENDIF
-        F0=ENVJ(N0,A0)-OBJ
-        N1=N0+5
-        F1=ENVJ(N1,A0)-OBJ
-        DO IT=1,20
-           NTERMS=N1-INT((N1-N0)/(1.0D0-F0/F1))
-           F=ENVJ(NTERMS,A0)-OBJ
-           IF (ABS(NTERMS-N1).LT.1)EXIT
-           N0=N1
-           F0=F1
-           N1=NTERMS
-           F1=F
-        END DO
-        MSTA2=NTERMS+10
-        RETURN
-        END
 
         DOUBLE PRECISION FUNCTION ENVJ(N,X)
         DOUBLE PRECISION X
-        ENVJ=0.5D0*DLOG10(6.28D0*N)-N*DLOG10(1.36D0*X/N)
+
+        ENVJ = 0.5D0 *DLOG10(6.28D0 * N) - N * DLOG10(1.36D0 * X / N)
+        
         RETURN
-        END
+        END FUNCTION ENVJ   

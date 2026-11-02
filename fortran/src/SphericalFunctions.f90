@@ -185,7 +185,10 @@ SUBROUTINE REFLECTIONCOEFFICIENTS(NTERMS,RADIUS,YHAT,ZHAT,YHATS,ZHATS,RTM,RTE,TT
     DO N = 1,NTERMS
                 
         IF(ISNAN(REAL(JKSA(N))).OR.ISNAN(IMAG(JKSA(N))).OR. &
-           ISNAN(REAL(YKSA(N))).OR.ISNAN(IMAG(YKSA(N))).OR.JKSA(N).EQ.0) THEN
+           ISNAN(REAL(YKSA(N))).OR.ISNAN(IMAG(YKSA(N))).OR. &
+           ISNAN(REAL(JKSA(N)*YKSA(N))).OR. &
+           ISNAN(IMAG(JKSA(N)*YKSA(N))).OR. &
+           JKSA(N).EQ.0) THEN
             inductive_limit = .true.
         ELSE
             inductive_limit = .false.
@@ -431,14 +434,13 @@ ELSE
         EMH = EXP(-EP/2.0_QL)
         EPH = EXP(EP/2.0_QL)
         E2H = EXP(-EP)
-        ES1 = EXP( - S(SXLYR) * ( ZS - DPTHL(SXLYR) ) )
-        ES2 = EXP( - S(SXLYR) * ( DPTHL(SXLYR+1) - ZS ) ) 
     ELSE
         EPH = ZERO
         EMH = ZERO
-        ES1 = ZERO
-        ES2 = ZERO
+        E2H = ZERO
     END IF
+    ES1 = EXP( - S(SXLYR) * ( ZS - DPTHL(SXLYR) ) )
+    ES2 = EXP( - S(SXLYR) * ( DPTHL(SXLYR+1) - ZS ) ) 
     FDEN = ( ADMHAT(SXLYR) - ADM(SXLYR) ) * ( ADMHAT(SXLYR+1) + ADM(SXLYR) ) - &
            ( ADMHAT(SXLYR) + ADM(SXLYR) ) * ( ADMHAT(SXLYR+1) - ADM(SXLYR) ) * E2H
     ADEN = ( IMPHAT(SXLYR) - IMP(SXLYR) ) * ( IMPHAT(SXLYR+1) + IMP(SXLYR) )  - &

@@ -1,4 +1,4 @@
-﻿SUBROUTINE PlaneWaveImpedance(NW,NLYR,THK,RES,NF,FREQ,K,Z,E)
+﻿SUBROUTINE PlaneWaveImpedance(DIAG,NW,NLYR,THK,RES,NF,FREQ,K,Z,E)
     
 ! Subroutine to compute the coefficients of a plane wave propagating
 ! in a layered earth
@@ -18,8 +18,9 @@
 ! E : electric field coefficients
     use PRECISION
     IMPLICIT NONE
-    INTEGER JL,NLYR,JF,NF,NW
-    REAL FREQ(NF),THK(NLYR-1),RES(NLYR), W
+    INTEGER JL,NLYR,JF,NF,NW,DIAG
+    REAL FREQ(NF),THK(NLYR-1),RES(NLYR)
+    REAL(KIND=QL) W
     COMPLEX(KIND=QL) K(NF,0:NLYR),Z(NF,0:NLYR),ZHAT(NLYR),EI,E(NF,0:NLYR,2),A,B,DEN
     
     E = (0._QL,0._QL)
@@ -69,20 +70,36 @@
             WRITE(NW,'('' Frequency:'',G15.7,'', Layer:'',I5,'', Impedance:'',2G15.7)') &
                 FREQ(JF),JL,Z(JF,JL)
         END DO
-    END DO
-    
+    END DO  
     WRITE(NW,'(/'' Propagation coefficients'')')
     DO JF = 1, NF
         DO JL = 0, NLYR
              WRITE(NW,100)FREQ(JF),JL,E(JF,JL,1),E(JF,JL,2)      
         END DO
     END DO
+    if ( DIAG > 1 ) THEN
+        WRITE(*,'(/'' Layer impedance'')')
+        DO JF = 1, NF
+            DO JL = 0, NLYR
+                WRITE(*,'('' Frequency:'',G15.7,'', Layer:'',I5,'', Impedance:'',2G15.7)') &
+                    FREQ(JF),JL,Z(JF,JL)
+            END DO
+        END DO
+    
+        WRITE(*,'(/'' Propagation coefficients'')')
+        DO JF = 1, NF
+            DO JL = 0, NLYR
+                 WRITE(*,100)FREQ(JF),JL,E(JF,JL,1),E(JF,JL,2)      
+            END DO
+        END DO
+    end IF
+
     
 100 FORMAT(' Frequency:',G15.7,', Layer:',I5,', Earthward propagation:',2G15.7,', Sunward propagation:',2G15.7)
     
 END SUBROUTINE PlaneWaveImpedance 
     
-SUBROUTINE APPARENTRESISTIVITY(NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE)
+SUBROUTINE APPARENTRESISTIVITY(DIAG,NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE)
 
 ! Subroutine to compute the apparent resistivity and phase
 
@@ -100,7 +117,7 @@ SUBROUTINE APPARENTRESISTIVITY(NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE)
 
 use PRECISION
 IMPLICIT NONE
-    INTEGER NF, NX, NY, ND, JF, JX, JY, JD, I, J
+    INTEGER NF, NX, NY, ND, JF, JX, JY, JD, I, J, DIAG
     REAL FREQ(NF)
     REAL(KIND=QL) APPRES(NF,NX,NY,ND,2,2), PHASE(NF,NX,NY,ND,2,2), DEN
     COMPLEX(KIND=QL) IMP(NF,NX,NY,ND,3,2), TEST 
@@ -182,10 +199,8 @@ subroutine planewavefieldssphericalharmonics(E0,nterms,ic,id,k,yhat,zhat,psia,ps
 !           _____
 !   E0 : Incident electric field.
 
+    use precision    
     implicit none
-    INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
-    REAL(KIND=QL), PARAMETER :: PI = 3.141592653589793    
-    COMPLEX(KIND=QL), PARAMETER :: CI = CMPLX (0.D0, 1.D0, KIND=QL)
     integer nterms,ic,ID,n,m,sic
     COMPLEX(KIND=QL) PSIA(NTERMS,-1:1), K, &
                      PSIF(NTERMS,-1:1), E0, AN, &
@@ -216,7 +231,7 @@ subroutine planewavefieldssphericalharmonics(E0,nterms,ic,id,k,yhat,zhat,psia,ps
 
 end subroutine planewavefieldssphericalharmonics    
 
-SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DEPTH, &
+SUBROUTINE MTSPHERE3D(DIAG,NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DEPTH, &
                       RADIUS, SRES, E, DPTHL, ES, HS)
 
 ! Main subroutine to compute the sphere response
@@ -249,7 +264,8 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
     
     implicit none
 
-    INTEGER NW, NF, NLYR, JF, JX, JY, JZ, SXLYR, N, M, NP, MP, NTERMS, NX, NY, ND, JD, I, TP, IP
+    INTEGER NW, NF, NLYR, JF, JX, JY, JZ, SXLYR, N, M, NP, MP, &
+            NTERMS, NX, NY, ND, JD, I, TP, IP, DIAG
     REAL THK(NLYR-1), RES(NLYR), DEPTH, FREQ(NF), SRES, RADIUS
     REAL(KIND=QL) THKD(NLYR-1),DPTHL(NLYR),ZS,W, RADIUSD, PXYD(NX,NY,ND,3), R, DEPTHD
     COMPLEX(KIND=QL) E(NF,0:NLYR,2),EL(2),YHATL(0:NLYR),ZHATL(0:NLYR),YHATS,ZHATS, &
@@ -282,7 +298,10 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
      END DO
     
     DO JF = 1, NF
-        WRITE(NW,'(/''Frequency:'',G15.7)')FREQ(JF)
+        WRITE(NW,'(/'' Frequency:'',G15.7)')FREQ(JF)
+        if ( DIAG > 0 ) then
+            WRITE(*,'(/'' Frequency:'',G15.7)')FREQ(JF)
+        end if
         W = 2._QL * PI * FREQ(JF)
         DO JZ = 0, NLYR
             IF ( JZ == 0 ) THEN
@@ -294,15 +313,30 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
         ZHATL = CI * W * MU0
         YHATS = 1 / SRES + CI * W * EPS0
         ZHATS = CI * W * MU0
+        if ( DIAG > 0 ) then
+            write(*,'(/'' Compute sphere reflection coefficients'')')
+        end if
         CALL REFLECTIONCOEFFICIENTS(NTERMS,RADIUSD,YHATL(SXLYR),ZHATL(SXLYR), &
             YHATS,ZHATS,RTM,RTE,TTM,TTE)
-        call MTLayeredEarthCorrection(NW,NTERMS,NLYR,THKD,DPTHL,ZS,RADIUSD, &
+        if ( DIAG > 0 ) then
+            write(*,'(/'' Compute layered earth correction'')')
+        end if
+        call MTLayeredEarthCorrection(DIAG,NW,NTERMS,NLYR,THKD,DPTHL,ZS,RADIUSD, &
             SXLYR,YHATL,ZHATL,YHATS,ZHATS,RTM,RTE,AI)
         WRITE(NW,'(/'' Reflection coefficients:'')')
+        if ( DIAG > 1 ) then
+            WRITE(*,'(/'' Reflection coefficients:'')')
+        end if
         DO N = 1, NTERMS
             WRITE(NW,'(I5,100G15.7)')N,RTM(N),RTE(N)
+            if ( DIAG > 1 ) then
+                WRITE(*,'(I5,100G15.7)')N,RTM(N),RTE(N)
+            end if
         END DO
         EL = E(JF,SXLYR,:)
+        if ( diag > 0 ) then
+            write(*,'(/'' Compute plane wave spherical harmonics'')')
+        end if
         CALL PLANEWAVESPHERICALHARMONICS(NTERMS,YHATL(SXLYR),ZHATL(SXLYR),ZS-DPTHL(SXLYR),EL,PSIAI,PSIFI)
         DO IP = 1, 2 ! X and Y directions
             WRITE(NW,'(/'' Plane wave spherical harmonics:'')')
@@ -316,6 +350,22 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
                     WRITE(NW,'(2I5,10G15.7)')N,M,PSIAI(IP,N,M),PSIFI(IP,N,M)
                 END DO
             END DO
+            if ( DIAG > 1 ) then
+                WRITE(*,'(/'' Plane wave spherical harmonics:'')')
+                IF ( IP == 1 ) THEN
+                    WRITE(*,'('' X directed propagation'')')
+                ELSE
+                    WRITE(*,'('' Y directed propagation'')')
+                END IF
+                DO N = 1, NTERMS
+                    DO M = -1, 1, 2
+                        WRITE(*,'(2I5,10G15.7)')N,M,PSIAI(IP,N,M),PSIFI(IP,N,M)
+                    END DO
+                END DO
+            end if
+            if ( diag > 0 ) then
+                WRITE(*,'('' Apply correction'')')
+            end if
             CALL MTSphereReflectionCORRECTION(NTERMS,AI,PSIAI(IP,:,:),PSIFI(IP,:,:),PSIAC,PSIFC)
             WRITE(NW,'(/'' Corrected potentials'')')
             DO N = 1, NTERMS
@@ -323,6 +373,14 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
                     WRITE(NW,'(2I5,10G15.7)')N,M,PSIAC(N,M),PSIFC(N,M)
                END DO
             END DO
+            if ( DIAG > 1 ) THEN
+                WRITE(*,'(/'' Corrected potentials'')')
+                DO N = 1, NTERMS
+                    DO M = -1, 1, 2
+                        WRITE(*,'(2I5,10G15.7)')N,M,PSIAC(N,M),PSIFC(N,M)
+                   END DO
+                END DO
+            end if
             PSIAR = ZERO
             PSIFR = ZERO
             PSIAT = ZERO
@@ -335,11 +393,14 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
                     PSIFT(N,M) = TTE(N) * PSIFC(N,M)
                 end do
             END DO
+            if ( DIAG > 0 ) then
+                WRITE(*,'(/'' Compute sphere induced field'')')
+            end if
             CALL MTSPHERE_SingleSource(NTERMS,PSIAR,PSIFR,PSIAT,PSIFT,NX,NY,ND,PXYD,NLYR, &
                 THKD,YHATL,ZHATL,YHATS,ZHATS,DPTHL,ZS,RADIUS,ES(JF,:,:,:,:,IP),HS(JF,:,:,:,:,IP))
             call dynamiccleaning(ES(JF,:,:,:,:,IP))
             call dynamiccleaning(HS(JF,:,:,:,:,IP))
-            WRITE(NW,'(/''Induced fields'')')
+            WRITE(NW,'(/'' Induced fields'')')
             DO JX = 1, NX
                 DO JY = 1, NY
                     DO JD = 1, ND
@@ -348,6 +409,17 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
                     end DO
                 END DO
             END DO
+            if ( DIAG > 1 ) then
+                WRITE(*,'(/'' Induced fields'')')
+                DO JX = 1, NX
+                    DO JY = 1, NY
+                        DO JD = 1, ND
+                            WRITE(*,'(G15.7,3I5,20G15.7)')FREQ(JF),JX,JY,JD,&
+                                ES(JF,JX,JY,JD,:,IP),HS(JF,JX,JY,JD,:,IP)
+                        end DO
+                    END DO
+                END DO
+            end if
         END DO
     end do
     
@@ -387,7 +459,7 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
     END SUBROUTINE MTSPHERE3D
     
     
-    SUBROUTINE GETIMPEDANCE(NF,NX,NY,ND,NLYR,NTERMS,PXYD,DPTHL,K,Z,DEPTH,RADIUS,E,ES,HS,IMPEDANCE,ET,HT)
+    SUBROUTINE GETIMPEDANCE(DIAG,NF,NX,NY,ND,NLYR,NTERMS,PXYD,DPTHL,K,Z,DEPTH,RADIUS,E,ES,HS,IMPEDANCE,ET,HT)
     
 ! Subroutine to compute the point impedances and total fields from the
 ! primary and secondary fields
@@ -408,7 +480,7 @@ SUBROUTINE MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DE
     
         use precision
     
-        INTEGER NX, NY, ND, JX, JY, JD, IC, IP, J, NF, JF, NLYR, RXLYR
+        INTEGER NX, NY, ND, JX, JY, JD, IC, IP, J, NF, JF, NLYR, RXLYR, DIAG
         real DEPTH, RADIUS
         real(KIND=QL) DR, PXYD(NX,NY,ND,3), DPTHL(NLYR), R
         COMPLEX(KIND=QL) IMPEDANCE(NF,NX,NY,ND,3,2), K(NF,0:NLYR), Z(NF,0:NLYR), E(NF,0:NLYR,2), &
@@ -540,7 +612,7 @@ SUBROUTINE ZPINV2(A, Aplus, tol)
   
 END SUBROUTINE ZPINV2
     
-SUBROUTINE MTLayeredEarthCorrection(NW,NTERMS,NLYR,THK,DPTHL,DEPTH,RADIUS, &
+SUBROUTINE MTLayeredEarthCorrection(DIAG,NW,NTERMS,NLYR,THK,DPTHL,DEPTH,RADIUS, &
     SXLYR,YHATL,ZHATL,YHATS,ZHATS,RTM,RTE,AI)
 
 use precision
@@ -569,7 +641,7 @@ use precision
 
    IMPLICIT NONE
    INTEGER NTERMS, NLYR, N, M, ICR, IC, IH, IHR, NLAT, NLON, &
-       SXLYR, NS, IR, INFO, NP, NW, JLAt, jlon, lwork
+       SXLYR, NS, IR, INFO, NP, NW, JLAt, jlon, lwork, DIAG
    REAL(KIND=QL) THK(NLYR-1), DEPTH, RADIUS, centre(3), TOL, DPTHL(NLYR)
    COMPLEX(KIND=QL) YHATL(0:NLYR), ZHATL(0:NLYR), YHATS, ZHATS, &
                     AI(-1:1,2*NTERMS,2*NTERMS), &
@@ -595,14 +667,23 @@ use precision
    CALL MTSphere_MultipleSources(NW,NTERMS,NLAT,NLON,depth,depth,NLYR,THK,&
        DPTHL,RADIUS,YHATL,ZHATL,RTM,RTE,E,H) 
    
-   WRITE(NW,'(/''Spherical Harmonic Analysis'')') 
-
+   WRITE(NW,'(/'' Spherical Harmonic Analysis'')') 
+   if ( DIAG > 1 ) then
+        WRITE(*,'(/'' Spherical Harmonic Analysis'')') 
+    end if 
    do M = -1, 1, 2
         IF ( M < 0 ) THEN
-            WRITE(NW,'(/''Sphere retroaction, negative order'')')
+            WRITE(NW,'(/'' Sphere retroaction, negative order'')')
         ELSE
-            WRITE(NW,'(/''Sphere retroaction, positive order'')')
+            WRITE(NW,'(/'' Sphere retroaction, positive order'')')
         END IF
+        if ( DIAG > 1 ) then           
+            IF ( M < 0 ) THEN
+                WRITE(*,'(/'' Sphere retroaction, negative order'')')
+            ELSE
+                WRITE(*,'(/'' Sphere retroaction, positive order'')')
+            END IF
+        end if
         ICR = 0
         do IC = 1, 2
             do n = 1, NTERMS
@@ -620,6 +701,9 @@ use precision
                            C(ihr,icr) = psif(NP,M)
                        end if
                        WRITE(NW,'(4I5,20G15.7)')IC,N,ih,np,C(ihr,icr)
+                       if ( DIAG > 1 ) THEN
+                            WRITE(*,'(4I5,20G15.7)')IC,N,ih,np,C(ihr,icr)
+                       end if
                     end do
                 end do
            end do
@@ -636,15 +720,23 @@ use precision
         CALL ZGETRF(2*NTERMS,2*NTERMS,A,2*NTERMS,IPIV,INFO)
         if ( INFO == 0 ) THEN
             CALL ZGETRI(2*NTERMS,A,2*NTERMS,IPIV,WORK,2*NTERMS,INFO) 
-        else
+        end if
+        if ( INFO /= 0 ) THEN
             A = (0._QL,0._QL)
         end if
         AI(M,:,:) = A
         IF ( M < 0 ) THEN
-            WRITE(NW,'(/''Sphere correction, negative order'')')
+            WRITE(NW,'(/'' Sphere correction, negative order'')')
         ELSE
-            WRITE(NW,'(/''Sphere correction, positive order'')')
+            WRITE(NW,'(/'' Sphere correction, positive order'')')
         END IF
+        if ( DIAG > 1 ) THEN
+            IF ( M < 0 ) THEN
+                WRITE(*,'(/'' Sphere correction, negative order'')')
+            ELSE
+                WRITE(*,'(/'' Sphere correction, positive order'')')
+            END IF
+        end if
         ICR = 0
         do IC = 1, 2
             do n = 1, NTERMS
@@ -654,6 +746,9 @@ use precision
                    do np = 1, nterms
                        ihr = ihr + 1
                        WRITE(NW,'(4I5,20G15.7)')IC,n,ih,NP,A(ihr,icr)
+                       if ( DIAG > 1 ) THEN
+                            WRITE(*,'(4I5,20G15.7)')IC,n,ih,NP,A(ihr,icr)
+                       end if
                    end do
                 end do
             END DO

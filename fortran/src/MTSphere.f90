@@ -1,4 +1,4 @@
-!  PROGRAM MTSPHERE Version 2.2.1 October 2026
+!  PROGRAM MTSPHERE Version 2.2.2 November 2026
 !    
 !    
 !        Developed by: Marc A. Vallée
@@ -12,7 +12,7 @@
 !    
 !  1 : Comment line
 !
-!  2 :  NLYR, NTERMS, NX, NY, NZ
+!  2 :  NLYR, NTERMS, NX, NY, NZ, DIAG
 !       NLYR : Layer number
 !       NTERMS : Number of spherical harmonics computed ( 6 recommended )
 !       ITM : If ITM = 1, horizontal transverse magnetic solution is included.
@@ -21,12 +21,18 @@
 !       ND : Number of D values
 !       IF NX and NY and ND > 0, XMIN, XMAX, YMIN, YMAX, DMIN and DMAX are provided.
 !       Otherwise, all X, Y, and D locations must be provided.
+!       DIAG : Diagnostic written on the screen file, with documentation more elaborate
+!       with increasing number.
+!       -1: No output on the screen.
+!       0 : Input file and results.
+!       1 : List of steps followed by the program.
+!       2 : Detailed results.
 !
 !  3 : NF, MINFREQ, MAXFREQ, LOGARITHMIC
 !      NF : Frequency number
 !      MINFREQ : Minimum frequency
 !      MAXFREQ : Maximum frequency
-!      LOGARITHMIC: 0 (linear) or 1 (logarithmic) frequency spacing
+!      LOGARITHMIC: 0 (linear), 1 (logarithmic) or 2 (user specific) frequency spacing
 !
 !  4 : RADIUS, DEPTH, SPHRES
 !    
@@ -49,7 +55,7 @@ IMPLICIT NONE
 
     INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
     INTEGER NR,NW,NW1,NW2,NLG,NSPH,LOGARITHMIC,NF,NLYR,QQDT(8),QQHMS(2),NTERMS, &
-        NX, NY, ND, JX, JY, JD
+        NX, NY, ND, JX, JY, JD, DIAG
     REAL MINFREQ, MAXFREQ, RADIUS, DEPTH, SPHRES, XMIN, XMAX, YMIN, YMAX, DMIN, DMAX, DX, DY, DD
     REAL, DIMENSION(:),ALLOCATABLE :: RES, THK, FREQ
     CHARACTER(LEN=10) TIME,DATE,ZONE    
@@ -57,7 +63,7 @@ IMPLICIT NONE
     CHARACTER(LEN=60) PVC
     CHARACTER(LEN=120) INP,TITLE
     DATA MONTH /'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'/
-    DATA PVC /'MTSphere - Version 2.2.1 - October 2026'/
+    DATA PVC /'MTSphere - Version 2.2.2 - November 2026'/
     REAL(KIND=QL), ALLOCATABLE :: X(:), Y(:), D(:), PXYD(:,:,:,:), APPRES(:,:,:,:,:,:), PHASE(:,:,:,:,:,:), DPTHL(:)
     COMPLEX(KIND=QL), ALLOCATABLE :: K(:,:), Z(:,:), E(:,:,:),IMP(:,:,:,:,:,:), &
                     ES(:,:,:,:,:,:),HS(:,:,:,:,:,:),ET(:,:,:,:,:,:),HT(:,:,:,:,:,:), &
@@ -97,7 +103,21 @@ IMPLICIT NONE
     READ(NR,'(A)') TITLE
     WRITE(NW,'(/1X,A)') TRIM (TITLE)
         
-    READ(NR,*) NLYR, NTERMS, NX, NY, ND
+    READ(NR,*) NLYR, NTERMS, NX, NY, ND, DIAG
+    if ( DIAG > 0 ) then
+        rewind NR
+        WRITE(NW,'(T11,A/T11,A/)') 'INPUT DATA', '----------'
+        DO JF = 1, 10000
+            READ(NR,'(A)',END = 102) INP
+            WRITE(*,'(1X,A)') INP
+        END DO         
+        102 REWIND NR
+            WRITE(*,2)
+        READ(NR,'(A)') TITLE
+        WRITE(*,'(/1X,A)') TRIM (TITLE)
+        READ(NR,*) NLYR, NTERMS, NX, NY, ND, DIAG
+    end IF
+        
     if ( NX < 0 .OR. NY < 0 .OR. ND < 0 ) then
         POSITION = .TRUE.
         NX = ABS(NX)
@@ -107,9 +127,13 @@ IMPLICIT NONE
         POSITION = .FALSE.
     end IF
     READ(NR,*) NF, MINFREQ, MAXFREQ, LOGARITHMIC
+    allocate(freq(NF))
+    if ( LOGARITHMIC == 2 ) then
+        read(NR,*)freq
+    end IF
     READ(NR,*) RADIUS, DEPTH, SPHRES
     
-    ALLOCATE ( RES(NLYR), THK(NLYR-1), FREQ(NF), X(NX), Y(NY), D(ND), PXYD(NX,NY,ND,3) )
+    ALLOCATE ( RES(NLYR), THK(NLYR-1), X(NX), Y(NY), D(ND), PXYD(NX,NY,ND,3) )
     ALLOCATE ( K(NF,0:NLYR), Z(NF,0:NLYR), E(NF,0:NLYR,2), APPRES(NF,NX,NY,ND,2,2), DPTHL(NLYR), & 
         PHASE(NF,NX,NY,ND,2,2), IMP(NF,NX,NY,ND,3,2), ES(NF,NX,NY,ND,3,2), HS(NF,NX,NY,ND,3,2), &
         PSIAT(2,NTERMS,-1:1),PSIFT(2,NTERMS,-1:1),ET(NF,NX,NY,ND,3,2), HT(NF,NX,NY,ND,3,2) )
@@ -127,7 +151,7 @@ IMPLICIT NONE
             DO I = 1, NF
                 FREQ(I) = MINFREQ + ( I - 1 ) * ( MAXFREQ - MINFREQ ) / ( NF - 1 )
             END DO
-        else 
+        else if ( LOGARITHMIC == 1 ) THEN
             DO I = 1, NF
                 FREQ(I) = MINFREQ * ( MAXFREQ / MINFREQ ) ** ( FLOAT ( I - 1 ) / FLOAT ( NF - 1 ) )
             END DO
@@ -203,7 +227,10 @@ IMPLICIT NONE
      CALL CPU_TIME (CMP_START)
      CALL READ_PARAMETERS
  
-    CALL PLANEWAVEIMPEDANCE(NW, NLYR, THK, RES, NF, FREQ, K, Z, E)
+    if ( DIAG > 0 ) then
+        write(*,'(/'' Compute plane wave impedance'')')
+    end IF
+    CALL PLANEWAVEIMPEDANCE(DIAG,NW, NLYR, THK, RES, NF, FREQ, K, Z, E)
     
     ES = (0._QL,0._QL)
     HS = (0._QL,0._QL)
@@ -211,11 +238,23 @@ IMPLICIT NONE
     DO JZ = 1, NLYR-1
         DPTHL(JZ+1) = DPTHL(JZ) + THK(JZ)
     END DO
-   
-    CALL MTSPHERE3D(NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DEPTH, RADIUS, SPHRES, E, DPTHL, ES, HS)    
-    CALL GETIMPEDANCE(NF,NX,NY,ND,NLYR,NTERMS,PXYD,DPTHL,K,Z,DEPTH,RADIUS,E,ES,HS,IMP,ET,HT)
-    CALL APPARENTRESISTIVITY(NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE )
-    CALL WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE, IMP, ES, HS, ET, HT)
+       
+    if ( DIAG > 0 ) then
+        write(*,'(/'' Start computation of secondary fields'')')
+    end if
+    CALL MTSPHERE3D(DIAG,NW, NF, NLYR, NTERMS, NX, NY, ND, FREQ, PXYD, THK, RES, DEPTH, RADIUS, SPHRES, E, DPTHL, ES, HS)    
+    if ( DIAG > 0 ) then
+        write(*,'(/'' Compute magnetotelluric impedances'')')
+    end if
+    CALL GETIMPEDANCE(DIAG,NF,NX,NY,ND,NLYR,NTERMS,PXYD,DPTHL,K,Z,DEPTH,RADIUS,E,ES,HS,IMP,ET,HT)
+    if ( DIAG > 0 ) then
+        write(*,'(/'' Compute apparent resistivity'')')
+    end if
+    CALL APPARENTRESISTIVITY(DIAG,NF, NX, NY, ND, FREQ, IMP, APPRES, PHASE )
+    if ( DIAG > 0 ) then
+        write(*,'(/'' Write results'')')
+    end if
+    CALL WRITERESULTS(DIAG,NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE, IMP, ES, HS, ET, HT)
     
     deallocate ( RES, THK, FREQ, PXYD, K, Z, DPTHL, E, APPRES, PHASE, IMP, ES, HS, ET, HT )
    
@@ -227,7 +266,11 @@ IMPLICIT NONE
 
    WRITE(NW,98) QQHMS(1:2),QQDT(3),MONTH(QQDT(2)),QQDT(1),ELAPSED
    WRITE(*,98)  QQHMS(1:2),QQDT(3),MONTH(QQDT(2)),QQDT(1),ELAPSED
-   
+   if ( diag > 0 ) then
+        write(*,*)'Press return to end.' 
+        read(*,*)
+    end if
+
    CLOSE(NW)
    STOP
    
@@ -236,7 +279,7 @@ IMPLICIT NONE
    
     END PROGRAM MAIN
     
-SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE, IMP, ES, HS, ET, HT)
+SUBROUTINE WRITERESULTS(DIAG, NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE, IMP, ES, HS, ET, HT)
 
 ! Subroutine to write all the results in an ASCII file
 
@@ -258,7 +301,7 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
 
     IMPLICIT NONE
     INTEGER, PARAMETER :: QL=SELECTED_REAL_KIND(12,80)
-    INTEGER NW, NW1, NW2, NF, NX, NY, ND, JF, JX, JY, JD, I, J
+    INTEGER NW, NW1, NW2, NF, NX, NY, ND, JF, JX, JY, JD, I, J, DIAG
     REAL FREQ(NF)
     REAL(KIND=QL) PXYD(NX,NY,ND,3), APPRES(NF,NX,NY,ND,2,2), PHASE(NF,NX,NY,ND,2,2)
     COMPLEX(KIND=QL) IMP(NF,NX,NY,ND,3,2), ES(NF,NX,NY,ND,3,2), HS(NF,NX,NY,ND,3,2), &
@@ -272,22 +315,37 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
                 CASE(1)
                     WRITE(NW,'(/'' XX Apparent resistivity, phase and impedance'')')
                     WRITE(NW1,'(/'' XX Apparent resistivity, phase and impedance'')')
+                    if ( DIAG > 2 ) then
+                        WRITE(*,'(/'' XX Apparent resistivity, phase and impedance'')')
+                    end if
                CASE(2)
                     WRITE(NW,'(/'' XY Apparent resistivity, phase and impedance'')')
                     WRITE(NW1,'(/'' XY Apparent resistivity, phase and impedance'')')
+                    if ( DIAG > 2 ) then
+                        WRITE(*,'(/'' XY Apparent resistivity, phase and impedance'')')
+                    end if
                 END SELECT
             CASE (2)
                 SELECT CASE(J)
                 CASE(1)
                     WRITE(NW,'(/'' YX Apparent resistivity, phase and impedance'')')
                     WRITE(NW1,'(/'' YX Apparent resistivity, phase and impedance'')')
+                    if ( DIAG > 2 ) then
+                        WRITE(*,'(/'' YX Apparent resistivity, phase and impedance'')')
+                    end if
                 CASE(2)
                     WRITE(NW,'(/'' YY Apparent resistivity, phase and impedance'')')
                     WRITE(NW1,'(/'' YY Apparent resistivity, phase and impedance'')')
+                    if ( DIAG > 2 ) then
+                        WRITE(*,'(/'' YY Apparent resistivity, phase and impedance'')')
+                    end if
                 END SELECT
             END SELECT
             WRITE(NW,100)
             WRITE(NW1,100)
+            if ( DIAG > 2 ) then
+                WRITE(*,100)
+            end if
             DO JF = 1, NF
                 do JD = 1, ND
                     DO JX = 1, NX
@@ -298,6 +356,11 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
                             WRITE(NW1,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),APPRES(JF,JX,JY,JD,I,J), &
                                                                       PHASE (JF,JX,JY,JD,I,J), &
                                                                       IMP(JF,JX,JY,JD,I,J)
+                            if ( DIAG > 2 ) Then
+                            WRITE(*,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),APPRES(JF,JX,JY,JD,I,J), &
+                                                                      PHASE (JF,JX,JY,JD,I,J), &
+                                                                      IMP(JF,JX,JY,JD,I,J)
+                            end if 
                         END DO
                     END DO
                 END DO
@@ -306,15 +369,23 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
     END DO
 
     WRITE(NW,'(/'' Tipper'')')
-    WRITE(NW1,'(/'' Tipper'')')
     WRITE(NW,120)
+    WRITE(NW1,'(/'' Tipper'')')
     WRITE(NW1,120)
+    if ( DIAG > 2 ) then
+        WRITE(*,'(/'' Tipper'')')
+        WRITE(*,120)
+    end if 
+    
     DO JF = 1, NF
         do JD = 1, ND
             DO JX = 1, NX
                 DO JY = 1, NY
                     WRITE(NW,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),IMP(JF,JX,JY,JD,3,:)
                     WRITE(NW1,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),IMP(JF,JX,JY,JD,3,:)
+                    if ( DIAG > 2 ) THEN
+                        WRITE(*,'(G15.7,3F10.1,10G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),IMP(JF,JX,JY,JD,3,:)
+                    end IF
                 END DO
             END DO
         END DO
@@ -325,14 +396,24 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
         CASE (1)
             WRITE(NW,'(/'' X polarization electric and magnetic fields'')')
             WRITE(NW2,'(/'' X polarization electric and magnetic fields'')')
+            if ( DIAG > 2 ) then
+                WRITE(*,'(/'' X polarization electric and magnetic fields'')')
+            end IF
         CASE(2)
             WRITE(NW,'(/'' Y polarization electric and magnetic fields'')')
             WRITE(NW2,'(/'' Y polarization electric and magnetic fields'')')
+            if ( DIAG > 2 ) then
+                WRITE(*,'(/'' Y polarization electric and magnetic fields'')')
+            end if
         END SELECT
         WRITE(NW,140)
-        WRITE(NW2,140)
         write(NW,'(/''Secondary'')')
+        WRITE(NW2,140)
         write(nw2,'(/''Secondary'')')
+        if ( DIAG > 2 ) THEN
+            WRITE(*,140)
+            write(*,'(/''Secondary'')')
+        end if
         DO JF = 1, NF
             do JD = 1, ND
                 DO JX = 1, NX
@@ -341,12 +422,19 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
                             (ES(JF,JX,JY,JD,J,I),J=1,3),(HS(JF,JX,JY,JD,J,I),J=1,3)
                         WRITE(NW2,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
                             (ES(JF,JX,JY,JD,J,I),J=1,3),(HS(JF,JX,JY,JD,J,I),J=1,3)
+                        if ( DIAG > 2 ) THEN
+                            WRITE(*,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
+                                (ES(JF,JX,JY,JD,J,I),J=1,3),(HS(JF,JX,JY,JD,J,I),J=1,3)
+                        end if
                     END DO
                 END DO
             END DO
         end do
         write(NW,'(/''Total'')')
         write(Nw2,'(/''Total'')')
+        if ( DIAG > 2 ) then
+            write(*,'(/''Total'')')
+        end IF
         DO JF = 1, NF
             do JD = 1, ND
                 DO JX = 1, NX
@@ -355,6 +443,10 @@ SUBROUTINE WRITERESULTS(NW, NW1, NW2, NF, NX, NY, ND, FREQ, PXYD, APPRES, PHASE,
                             (ET(JF,JX,JY,JD,J,I),J=1,3),(HT(JF,JX,JY,JD,J,I),J=1,3)
                         WRITE(NW2,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
                             (ET(JF,JX,JY,JD,J,I),J=1,3),(HT(JF,JX,JY,JD,J,I),J=1,3)
+                        if ( DIAG > 2 ) THEN
+                            WRITE(*,'(G15.7,3F10.1,22G15.7)')FREQ(JF),PXYD(JX,JY,JD,:),&
+                                (ET(JF,JX,JY,JD,J,I),J=1,3),(HT(JF,JX,JY,JD,J,I),J=1,3)
+                        end IF
                     END DO
                 END DO
             END DO

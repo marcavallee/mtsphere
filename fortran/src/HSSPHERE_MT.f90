@@ -446,8 +446,8 @@ do JD = 1, ND
                 CALL MTSPHERE_HNK_SingleSource(NTERMS,SXLYR,RXLYR,PSIA,PSIF, &
                             NLYR,THKD,DPTHL,YHAT,ZHAT,ZS,ZR,RHO,EH,HH)
                 DO M = -2, 2
+                    EMPHI = EXP ( CI * M * PHI )
                     DO IC = 1, 3
-                        EMPHI = EXP ( CI * M * PHI )
                         E(JX,JY,JD,IC) = E(JX,JY,JD,IC) + EH(M,IC) * EMPHI
                         H(JX,JY,JD,IC) = H(JX,JY,JD,IC) + HH(M,IC) * EMPHI
                     END DO
@@ -548,7 +548,7 @@ Hh = Hh / ( RHO * 4._QL * PI )
     HW = (0._QL, 0._QL)
     WJ = 0._QL
     WJ(0) = WJ0(I)
-    if (RHO > 0.0015_QL ) then
+    if (RHO > 0.01_QL ) then
         WJ(1) = WJ1(I)
         WJ(2) = 2._QL * WJ(1) / ( RHO * LMBDA ) - WJ(0)
     end if
