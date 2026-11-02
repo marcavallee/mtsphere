@@ -1,3 +1,5 @@
+Release 2.2.2, November 206: Corrections in Fortran and Python code, including an improvement in the Python Hankel transform computation. Introduction of DIAG (diagnostic) variable. 
+
 Release 2.2.1, October 2026: Various corrections suggested by users, particularly in the Python version.
 
 Release 2.2.0, September 2026: New version with measurements and fields at any location in space.
